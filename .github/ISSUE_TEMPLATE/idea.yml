@@ -1,0 +1,11 @@
+name: Idea or question
+description: Something you would like to do with MicroVMs and Deep Agents, or a question about how it works.
+labels: [idea]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like to do, and what gets in the way?
+      description: Do not paste tokens, `.env` contents or endpoint URLs.
+    validations:
+      required: true

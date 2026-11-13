@@ -1,0 +1,17 @@
+{
+  "checkpoint": {
+    "created_at": "2026-10-21T06:53:31.483558831Z",
+    "disk_bytes": 0,
+    "id": "01a15d3c-8bdb-7879-8783-10c0d1baea26",
+    "memory_bytes": 2147483648,
+    "microvm_id": "01a15d39-10d9-7056-a213-258c8db50d00",
+    "name": "probe-524fe8-cp",
+    "region": "mkc1",
+    "size": {
+      "cpu": 1,
+      "disk": 50,
+      "memory": 2048
+    },
+    "status": "CHECKPOINT_CREATING"
+  }
+}

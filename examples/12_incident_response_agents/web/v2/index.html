@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Incident response on MicroVMs</title>
+  <link rel="stylesheet" href="static/app.css">
+  <script src="static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="mark" aria-hidden="true"></span><h1>Incident response <span>on MicroVMs</span></h1></div>
+    <div class="views" role="group" aria-label="View">
+      <button id="view-incident" type="button" aria-pressed="true">Incident</button>
+      <button id="view-fleet" type="button" aria-pressed="false" title="Every agent host, all incidents">Fleet<span
+        id="fleet-count" class="n"></span></button>
+    </div>
+    <button id="decisions-waiting" class="decisions-btn" type="button" disabled>No decision waiting</button>
+    <div class="session">
+      <form id="token-form" hidden>
+        <label for="token">Operator token</label>
+        <input id="token" type="password" autocomplete="off" required>
+        <button type="submit">Use</button>
+      </form>
+      <button id="forget" type="button" hidden>Forget token</button>
+    </div>
+  </header>
+  <p id="banner" class="banner" role="status" hidden></p>
+  <main id="board" class="board">
+    <nav class="rail" aria-label="Incidents">
+      <span class="label">Incidents</span>
+      <ul id="rail" class="rail-list"></ul>
+      <p class="rail-note muted"><span class="key-c" aria-hidden="true"></span> commander · <span class="key-s" aria-hidden="true"></span> specialists</p>
+    </nav>
+    <section id="incident-view" class="incident" aria-live="polite">
+      <p id="empty" class="empty muted">No incidents yet. An alert on the relay starts one.</p>
+      <p id="token-needed" class="empty muted" hidden>Enter the operator token at the top right to see the incidents.</p>
+      <div id="detail" class="detail" hidden>
+        <div class="head">
+          <h2 id="detail-title"></h2>
+          <p id="alarm" class="alarm" hidden></p>
+          <button id="close-incident" class="close" type="button" hidden>Close incident</button>
+        </div>
+        <p id="service" class="service-line"></p>
+        <ol id="steps" class="steps" aria-label="Progress"></ol>
+        <section class="headline" aria-labelledby="headline-who">
+          <span id="headline-who" class="who">Commander</span>
+          <div class="headline-body">
+            <p id="headline"></p>
+            <button id="headline-more" class="more" type="button" aria-expanded="false">Full message</button>
+            <div id="last-message" class="md full-message" hidden></div>
+            <form id="message-form" hidden>
+              <label for="message">Another turn for the commander</label>
+              <div class="send">
+                <textarea id="message" rows="1" required></textarea>
+                <button type="submit">Send</button>
+              </div>
+            </form>
+          </div>
+        </section>
+        <div id="approvals" class="approvals"></div>
+        <div id="outcome" class="outcome" hidden></div>
+        <section class="runtime" aria-labelledby="runtime-title">
+          <div class="runtime-head">
+            <h3 id="runtime-title" class="label">Running on MicroVMs</h3>
+            <span class="caption">one agent host (a MicroVM) for the commander, one per specialist</span>
+            <span id="runtime-count" class="count muted"></span>
+          </div>
+          <div id="lane"></div>
+        </section>
+        <section class="tabs-wrap" aria-label="Incident detail">
+          <div class="tabs" role="tablist">
+            <button id="tab-story" type="button" role="tab" aria-selected="true">Story<span id="n-story" class="n"></span></button>
+            <button id="tab-activity" type="button" role="tab" aria-selected="false">Activity<span id="n-activity" class="n"></span></button>
+            <button id="tab-gateway" type="button" role="tab" aria-selected="false">Action Gateway<span id="n-gateway" class="n"></span></button>
+            <button id="tab-report" type="button" role="tab" aria-selected="false" hidden>Postmortem</button>
+          </div>
+          <div id="panel-story" class="tabpanel" role="tabpanel">
+            <p class="caption">What happened, newest first: the alert, each sub-agent's report to the commander, every decision and policy check.</p>
+            <ol id="timeline" class="timeline"></ol>
+          </div>
+          <div id="panel-activity" class="tabpanel" role="tabpanel" hidden>
+            <p class="caption">Every tool call the agents made in the latest runs, newest first. The story is the summary of these.</p>
+            <div class="tbl-wrap"><table><tbody id="activity"></tbody></table></div>
+          </div>
+          <div id="panel-gateway" class="tabpanel" role="tabpanel" hidden>
+            <p class="caption">Every call that reached DigitalOcean through the Action Gateway, with the policy tier that applied.</p>
+            <div class="tbl-wrap"><table>
+              <thead><tr><th>Policy tier</th><th>What it means</th><th>Tools</th></tr></thead>
+              <tbody id="policy"></tbody>
+            </table></div>
+            <div class="tbl-wrap"><table>
+              <thead><tr><th>Time</th><th>Tier</th><th>Tool</th><th>Outcome</th></tr></thead>
+              <tbody id="audit"></tbody>
+            </table></div>
+          </div>
+          <div id="panel-report" class="tabpanel" role="tabpanel" hidden>
+            <p class="caption">Written by the commander at the end of the incident.</p>
+            <article id="report" class="report"></article>
+          </div>
+        </section>
+      </div>
+    </section>
+    <section id="fleet-view" class="fleet" aria-labelledby="fleet-title" hidden>
+      <div class="fleet-sum">
+        <h2 id="fleet-title" class="label">Fleet on MicroVMs</h2>
+        <span class="stat"><b id="stat-incidents">0</b>incidents</span>
+        <span class="stat"><b id="stat-hosts">0</b>agent hosts</span>
+        <span class="stat"><b id="stat-specialists">0</b>specialist hosts</span>
+        <span class="stat"><b id="stat-running">0</b>running now</span>
+        <p class="caption">Every MicroVM the demo has open, one lane per incident: its commander's agent host, then one agent host per
+          specialist. Open a lane to see its story.</p>
+      </div>
+      <div class="fhead" aria-hidden="true">
+        <span class="label">Incident</span>
+        <div class="lane compact"><span class="label">Commander · agent host</span><span></span>
+          <span class="label span5">Specialists · one agent host each</span></div>
+      </div>
+      <ul id="fleet" class="fleet-list"></ul>
+    </section>
+  </main>
+  <template id="approval-template">
+    <article class="decision">
+      <p class="decision-top"><span class="label kind">Your decision</span>
+        <span class="muted held" title="The Action Gateway holds this call until a human decides. The policy is on the Action Gateway tab.">held by the Action Gateway</span>
+        <span class="expires muted"></span></p>
+      <p class="question"></p>
+      <p class="why"><b>Why: </b><span class="evidence"></span></p>
+      <ul class="same-elsewhere" hidden></ul>
+      <p class="expired-note" hidden>Expired: the gateway no longer takes a decision on it. Approve tells the commander, which can ask again; Deny ends it.</p>
+      <p class="connect" hidden>Open the connect link, then confirm: <a class="link" target="_blank" rel="noopener noreferrer"></a></p>
+      <div class="act">
+        <span class="actions"></span>
+        <input class="reason" type="text" maxlength="500" placeholder="Reason (optional, recorded with the decision)" aria-label="Reason">
+      </div>
+      <details class="facts">
+        <summary>Details: tool and arguments, what the relay checked, the commander's full evidence</summary>
+        <div class="facts-body">
+          <div><span class="label">Tool and arguments</span><pre class="arguments"></pre></div>
+          <div><span class="label">Checked by the relay before asking</span><ul class="checked"></ul></div>
+          <div><span class="label">Evidence, in the commander's words</span><p class="evidence-full"></p></div>
+        </div>
+      </details>
+    </article>
+  </template>
+</body>
+</html>

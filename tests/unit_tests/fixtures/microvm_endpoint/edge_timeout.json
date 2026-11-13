@@ -1,0 +1,18 @@
+{
+  "body": "<!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n<head>\n\n<title>ondigitalocean.com | 504: Gateway time-out</title>\n<meta charset=\"UTF-",
+  "headers": {
+    "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0",
+    "cf-ray": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "6723",
+    "content-type": "text/html; charset=UTF-8",
+    "date": "<redacted>",
+    "expires": "<redacted>",
+    "referrer-policy": "<redacted>",
+    "retry-after": "120",
+    "server": "cloudflare",
+    "x-frame-options": "<redacted>"
+  },
+  "http_version": "HTTP/1.1",
+  "status": 504
+}

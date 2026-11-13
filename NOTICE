@@ -1,0 +1,50 @@
+langchain-digitalocean-microvm
+Copyright 2026 DigitalOcean, LLC. Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This project is not affiliated with, sponsored by or endorsed by LangChain, Inc.
+LangChain, LangGraph, LangSmith and Deep Agents are trademarks of LangChain, Inc.
+They are used here only to say what this package works with.
+
+Third-party software
+--------------------
+This package is built for LangChain Deep Agents. It depends on the software below
+and does not include or redistribute it; each package is installed from PyPI under
+its own licence and remains the property of its authors.
+
+  deepagents                  MIT   Copyright (c) LangChain, Inc.
+  deepagents-code             MIT   Copyright (c) LangChain, Inc.
+  langchain, langchain-core   MIT   Copyright (c) LangChain, Inc.
+  langchain-anthropic         MIT   Copyright (c) LangChain, Inc.
+  langchain-quickjs           MIT   Copyright (c) LangChain, Inc.
+  langchain-tests             MIT   Copyright (c) LangChain, Inc.
+  langgraph, langgraph-sdk,
+  langgraph-cli               MIT   Copyright (c) LangChain, Inc.
+  langsmith                   MIT   Copyright (c) LangChain, Inc.
+
+The optional `agent-host` extra also uses langgraph-api and langgraph-runtime-inmem,
+which LangChain distributes under the Elastic License 2.0 (ELv2), not under Apache-2.0 or MIT.
+Read that licence before you run agent hosts, and in particular before you offer them
+as a service to others. This repository contains none of that code.
+
+Other dependency licences worth knowing
+---------------------------------------
+Most other dependencies are under permissive licences (MIT, BSD, Apache-2.0, ISC, PSF).
+These are not, and are installed with this package or its extras:
+
+  certifi, pathspec    MPL-2.0   File-level copyleft: it applies to changes made to the
+                                 MPL-licensed files themselves. This package does not
+                                 modify or include them.
+  orjson               MPL-2.0 AND (Apache-2.0 OR MIT)   Used through langgraph-sdk.
+  forbiddenfruit       GPL-3.0-or-later or MIT   A dependency of langgraph-runtime-inmem
+                                 (through blockbuster), so only with the `agent-host`
+                                 extra. Its distribution includes both licence texts
+                                 (COPYING and COPYING.mit).
+
+The full licence text of each dependency is in its own distribution. `uv pip list`
+shows what is installed, and each package's metadata states its licence.
+
+The Deep Agents course
+----------------------
+Examples 01, 04, 05 and 07 are adapted from labs in the Deep Agents course by
+LangChain (https://github.com/langchain-ai/lca-deepagents); each example's README
+names the lab it ports. The course materials remain the property of LangChain, Inc.

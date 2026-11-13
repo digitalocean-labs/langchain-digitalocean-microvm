@@ -1,0 +1,16 @@
+{
+  "body": "<!DOCTYPE html>\n<html>\n<head>\n    <title>DigitalOcean - Not found</title>\n    <link href=\"https://assets.digitalocean.com/public/favicon.png\" rel=\"shortcut icon\" type=\"image/png\">\n    <style type=\"text/css\">\n        body {\n            background-color: white;\n            margin: 0px;\n            padding: 0px;\n            font-family: \"Proxima Nova\", Helvetica, sans-serif;\n        }\n        h1 {\n  ",
+  "headers": {
+    "cf-cache-status": "<redacted>",
+    "cf-ray": "<redacted>",
+    "connection": "keep-alive",
+    "content-encoding": "<redacted>",
+    "content-type": "text/html",
+    "date": "<redacted>",
+    "do-upstream-service-time": "<redacted>",
+    "server": "cloudflare",
+    "transfer-encoding": "chunked"
+  },
+  "http_version": "HTTP/1.1",
+  "status": 404
+}

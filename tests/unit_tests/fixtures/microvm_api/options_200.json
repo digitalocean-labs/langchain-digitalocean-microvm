@@ -1,0 +1,83 @@
+{
+  "account_limits": {
+    "max_disk_bytes": 85899345920,
+    "max_idle_timeout_seconds": 3600,
+    "max_memory_bytes": 4294967296,
+    "max_total_count": 20
+  },
+  "default_region": "mkc1",
+  "features": [
+    {
+      "enabled": true,
+      "name": "microvm"
+    },
+    {
+      "enabled": true,
+      "name": "exec_pty"
+    },
+    {
+      "enabled": false,
+      "name": "port_forward"
+    }
+  ],
+  "resource_pricing": {
+    "price_per_gib_bandwidth": 0.01,
+    "price_per_gib_memory_hour": 0.0085,
+    "price_per_gib_storage_month": 0.05,
+    "price_per_vcpu_hour": 0.022
+  },
+  "sizes": [
+    {
+      "available": true,
+      "cpu": 1,
+      "disk": 50,
+      "memory": 2048,
+      "pricing": {
+        "price_per_hour": 0.039,
+        "price_per_month": 28.47
+      },
+      "regions": [
+        "mkc1"
+      ]
+    },
+    {
+      "available": true,
+      "cpu": 2,
+      "disk": 80,
+      "memory": 4096,
+      "pricing": {
+        "price_per_hour": 0.078,
+        "price_per_month": 56.94
+      },
+      "regions": [
+        "mkc1"
+      ]
+    },
+    {
+      "available": false,
+      "cpu": 8,
+      "disk": 320,
+      "memory": 16384,
+      "pricing": {
+        "price_per_hour": 0.312,
+        "price_per_month": 227.76
+      },
+      "regions": [
+        "mkc1"
+      ]
+    },
+    {
+      "available": false,
+      "cpu": 16,
+      "disk": 400,
+      "memory": 32768,
+      "pricing": {
+        "price_per_hour": 0.624,
+        "price_per_month": 455.52
+      },
+      "regions": [
+        "mkc1"
+      ]
+    }
+  ]
+}

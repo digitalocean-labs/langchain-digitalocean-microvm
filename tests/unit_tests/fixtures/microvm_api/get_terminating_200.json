@@ -1,0 +1,41 @@
+{
+  "microvm": {
+    "auto_pause": {
+      "enabled": true,
+      "idle_timeout": "30s"
+    },
+    "auto_resume": true,
+    "created_at": "2026-10-21T06:49:45Z",
+    "http_protocol": "http",
+    "id": "01a15d39-10d9-7056-a213-258c8db50d00",
+    "name": "probe-524fe8-a",
+    "networking": "public",
+    "ports": [
+      8080
+    ],
+    "project_id": "<REDACTED_PROJECT_ID>",
+    "region": "mkc1",
+    "size": {
+      "cpu": 1,
+      "disk": 50,
+      "memory": 2048
+    },
+    "source": {
+      "oci_ref": "docker.io/mendhak/http-https-echo:latest"
+    },
+    "state": "terminating",
+    "tags": [
+      "microvm-probe",
+      "microvm-probe-run:524fe8",
+      "microvm-agenthost-graph:echo"
+    ],
+    "urls": [
+      {
+        "default": true,
+        "hostname": "01a15d39-10d9-7056-a213-258c8db50d00.mkc1.microvm.ondigitalocean.com",
+        "port": 8080,
+        "status": "ACTIVE"
+      }
+    ]
+  }
+}

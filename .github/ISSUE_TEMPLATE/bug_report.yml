@@ -1,0 +1,42 @@
+name: Bug report
+description: Something does not work, or an example does not do what its README says.
+labels: [bug]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Example or call
+      description: The example (for instance `examples/03_subagent_sandboxes`) or the API call that failed.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - local (no DigitalOcean account)
+        - real, endpoint transport
+        - real, exec transport
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: What happened, and what you expected
+      description: Paste the command and its output. Remove tokens, `.env` contents and endpoint URLs first.
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: Python, `uv pip list | grep -i -E "deepagents|langchain-digitalocean"`, operating system.
+    validations:
+      required: false
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup check
+      description: The output of `uv run python scripts/check_setup.py --offline` (it prints no secrets).
+    validations:
+      required: false

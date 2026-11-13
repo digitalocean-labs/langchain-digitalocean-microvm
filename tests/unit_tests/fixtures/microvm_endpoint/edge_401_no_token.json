@@ -1,0 +1,22 @@
+{
+  "body": {
+    "id": "Unauthorized",
+    "message": "Unable to authenticate you"
+  },
+  "headers": {
+    "cf-cache-status": "<redacted>",
+    "cf-ray": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "64",
+    "content-type": "application/json",
+    "date": "<redacted>",
+    "do-upstream-service-time": "<redacted>",
+    "server": "cloudflare",
+    "set-cookie": "<redacted>",
+    "x-gateway": "<redacted>",
+    "x-request-id": "<redacted>",
+    "x-response-from": "<redacted>"
+  },
+  "http_version": "HTTP/1.1",
+  "status": 401
+}

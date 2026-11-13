@@ -1,0 +1,18 @@
+# The incident commander's agent-host image: this package, the Agent Server and the example's model client.
+# `uv lock` here after changing it; images/agent-host/build_image.py --spec host/image.json installs the lock.
+[project]
+name = "incident-commander-agents-host"
+version = "0.1.0"
+description = "Example 12's incident commander, served by an Agent Server in a MicroVM agent host"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+    "langchain-digitalocean-microvm[agent-host]",
+    "langchain-anthropic",
+    "python-dotenv",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+langchain-digitalocean-microvm = { path = "../../..", editable = false }

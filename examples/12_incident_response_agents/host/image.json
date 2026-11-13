@@ -1,0 +1,16 @@
+{
+  "project": ".",
+  "root": "../../..",
+  "files": [
+    "images/agent-host/auth.py",
+    "examples/incident_common/__init__.py",
+    "examples/incident_common/events.py",
+    "examples/12_incident_response_agents/agent.py",
+    "examples/12_incident_response_agents/roles.py",
+    "examples/12_incident_response_agents/host/graph.py",
+    "examples/12_incident_response_agents/host/routes.py",
+    "examples/12_incident_response_agents/host/langgraph.json"
+  ],
+  "writable": ["examples/12_incident_response_agents/outputs", "examples/incident_common/outputs"],
+  "config": "examples/12_incident_response_agents/host/langgraph.json"
+}

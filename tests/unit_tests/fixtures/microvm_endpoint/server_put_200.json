@@ -1,0 +1,21 @@
+{
+  "body": {
+    "bytes": 1048576,
+    "seconds": 0.002,
+    "sha256": "221ca727dd1d742a38a9e5258ed2d19e890a6e1c5648652d3709a362d449fad7"
+  },
+  "headers": {
+    "cf-cache-status": "<redacted>",
+    "cf-ray": "<redacted>",
+    "connection": "keep-alive",
+    "content-encoding": "<redacted>",
+    "content-type": "application/json",
+    "date": "<redacted>",
+    "do-upstream-service-time": "<redacted>",
+    "server": "cloudflare",
+    "transfer-encoding": "chunked",
+    "x-envoy-upstream-service-time": "<redacted>"
+  },
+  "http_version": "HTTP/1.1",
+  "status": 200
+}

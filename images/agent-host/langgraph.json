@@ -1,0 +1,17 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "researcher": "./agent.py:make_graph",
+    "echo": "./agent.py:echo"
+  },
+  "auth": {
+    "path": "./auth.py:auth",
+    "disable_studio_auth": true
+  },
+  "http": {
+    "app": "./artifacts_app.py:app",
+    "enable_custom_route_auth": true
+  }
+}

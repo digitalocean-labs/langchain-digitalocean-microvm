@@ -1,0 +1,15 @@
+# gitleaks configuration: the default rules plus two reviewed false positives (synthetic data).
+# Each entry names the one rule and the one file it applies to, so a real secret in the same
+# file is still found. Add an entry only for a reviewed false positive, with the reason.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "images/agent-host/README.md: a curl example with the placeholder token `dev-token`"
+targetRules = ["curl-auth-header"]
+paths = ['''images/agent-host/README\.md''']
+
+[[allowlists]]
+description = "tests/unit_tests/test_probe_redaction.py: a synthetic JWT that the redaction test must find"
+targetRules = ["jwt"]
+paths = ['''tests/unit_tests/test_probe_redaction\.py''']

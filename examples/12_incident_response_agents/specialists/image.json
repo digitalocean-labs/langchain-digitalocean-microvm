@@ -1,0 +1,19 @@
+{
+  "project": ".",
+  "root": "../../..",
+  "files": [
+    "images/agent-host/auth.py",
+    "examples/incident_common/__init__.py",
+    "examples/incident_common/events.py",
+    "examples/incident_common/models.py",
+    "examples/incident_common/world.py",
+    "examples/incident_common/world_server.py",
+    "examples/incident_common/sandbox/*.py",
+    "examples/12_incident_response_agents/roles.py",
+    "examples/12_incident_response_agents/specialists/broker_client.py",
+    "examples/12_incident_response_agents/specialists/graphs.py",
+    "examples/12_incident_response_agents/specialists/langgraph.json"
+  ],
+  "writable": ["examples/incident_common/outputs"],
+  "config": "examples/12_incident_response_agents/specialists/langgraph.json"
+}

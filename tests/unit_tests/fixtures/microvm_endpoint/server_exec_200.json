@@ -1,0 +1,24 @@
+{
+  "body": {
+    "exit_code": 0,
+    "seconds": 0.002,
+    "stderr": "",
+    "stdout": "hi\n",
+    "timed_out": false,
+    "truncated": false
+  },
+  "headers": {
+    "cf-cache-status": "<redacted>",
+    "cf-ray": "<redacted>",
+    "connection": "keep-alive",
+    "content-encoding": "<redacted>",
+    "content-type": "application/json",
+    "date": "<redacted>",
+    "do-upstream-service-time": "<redacted>",
+    "server": "cloudflare",
+    "transfer-encoding": "chunked",
+    "x-envoy-upstream-service-time": "<redacted>"
+  },
+  "http_version": "HTTP/1.1",
+  "status": 200
+}

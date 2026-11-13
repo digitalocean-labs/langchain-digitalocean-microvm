@@ -1,0 +1,128 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "langchain-digitalocean-microvm"
+version = "0.1.0"
+description = "DigitalOcean MicroVMs as sandboxes for LangChain Deep Agents"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.11,<3.15"
+authors = [{ name = "DigitalOcean" }]
+keywords = ["langchain", "deepagents", "sandbox", "digitalocean", "microvm", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+dependencies = [
+    "deepagents>=0.7.0,<0.8.0",
+    "httpx>=0.28,<1.0",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+# Agent hosts (experimental): whole subagents in MicroVMs behind an embedded Agent
+# Protocol gateway. Local mode spawns `langgraph dev` from the current interpreter.
+agent-host = [
+    "langgraph-cli[inmem]>=0.4.0",
+    "langgraph-sdk>=0.4.0",
+    "starlette",
+    "uvicorn",
+]
+
+# `dcode --sandbox microvm` (deepagents-code). Imported only by dcode.
+[project.entry-points."deepagents_code.sandbox_providers"]
+microvm = "langchain_digitalocean_microvm.integrations.deepagents_code:MicroVMSandboxProvider"
+
+[project.urls]
+Repository = "https://github.com/digitalocean-labs/langchain-digitalocean-microvm"
+Issues = "https://github.com/digitalocean-labs/langchain-digitalocean-microvm/issues"
+
+[dependency-groups]
+# Unit tests run in local mode: no credentials, no network.
+test = [
+    "pytest>=8.0",
+    "langchain-tests>=1.1.9",
+    # Needs Python 3.12+; on 3.11 its placeholder release would pin deepagents to an old 0.7.
+    "deepagents-code; python_full_version >= '3.12'",
+    "python-dotenv",
+]
+# Example agents and the agent-host template's graphs.
+examples = [
+    "fastmcp>=4",
+    "langchain-anthropic",
+    "langchain-quickjs>=0.3.8",
+    "markdown>=3.11",
+    "nh3>=0.3.7",
+    "python-dotenv",
+    "tavily-python>=0.8.4",
+]
+lint = ["ruff>=0.15", "pyright>=1.1.400"]
+dev = [
+    { include-group = "test" },
+    { include-group = "examples" },
+    { include-group = "lint" },
+]
+
+[tool.uv]
+default-groups = ["dev"]
+# Rebuild this package when its sources change, not only its pyproject.toml (uv's default): the agent-host images
+# install it as a wheel built from this checkout (images/agent-host/build_image.py).
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.py" }, { file = "src/**/*.typed" }]
+
+[tool.hatch.build.targets.sdist]
+# Patterns are gitignore-style: the leading "/" anchors each one to the project root (unanchored, "README.md"
+# would match every README.md below it). The agent-host template files are listed too: `uv build` builds the
+# wheel from the sdist.
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/NOTICE",
+    "/CHANGELOG.md",
+    "/images/agent-host/agent.py",
+    "/images/agent-host/auth.py",
+    "/images/agent-host/artifacts_app.py",
+    "/images/agent-host/langgraph.json",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/langchain_digitalocean_microvm"]
+
+# The agent-host template local mode serves from an installed wheel (agent_host.local.default_template_dir).
+# images/agent-host/ stays the only source copy (the image build uses it); local mode runs in the user's
+# environment, so the template's own pyproject.toml, uv.lock and Dockerfile are left out.
+[tool.hatch.build.targets.wheel.force-include]
+"images/agent-host/agent.py" = "langchain_digitalocean_microvm/agent_host/_template/agent.py"
+"images/agent-host/auth.py" = "langchain_digitalocean_microvm/agent_host/_template/auth.py"
+"images/agent-host/artifacts_app.py" = "langchain_digitalocean_microvm/agent_host/_template/artifacts_app.py"
+"images/agent-host/langgraph.json" = "langchain_digitalocean_microvm/agent_host/_template/langgraph.json"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit_tests", "tests/integration_tests"]
+pythonpath = ["tests", "tests/unit_tests"]
+asyncio_mode = "auto"
+addopts = "-m 'not slow and not e2e and not live'"
+markers = [
+    "slow: minutes, not seconds (the offline standard sandbox suite); run with -m slow",
+    "e2e: real local `langgraph dev` processes (needs the agent-host extra); run with -m e2e",
+    "live: real MicroVMs (credentials in .env; creates and deletes one); run with -m live",
+]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+
+[tool.ruff]
+lint.select = ["E", "F", "I", "UP"]
+lint.ignore = ["T201", "E501", "UP006", "UP007", "E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["langchain_digitalocean_microvm"]

@@ -1,0 +1,40 @@
+{
+  "microvm": {
+    "auto_pause": {
+      "enabled": true,
+      "idle_timeout": "30s"
+    },
+    "auto_resume": true,
+    "created_at": "2026-10-21T06:53:44.553282484Z",
+    "http_protocol": "http",
+    "id": "01a15d3c-b8f3-7895-bc9c-8c0299211845",
+    "name": "probe-524fe8-b",
+    "networking": "public",
+    "ports": [
+      8080
+    ],
+    "project_id": "<REDACTED_PROJECT_ID>",
+    "region": "mkc1",
+    "size": {
+      "cpu": 1,
+      "disk": 50,
+      "memory": 2048
+    },
+    "source": {
+      "checkpoint_id": "01a15d3c-8bdb-7879-8783-10c0d1baea26",
+      "oci_ref": "docker.io/mendhak/http-https-echo:latest"
+    },
+    "state": "running",
+    "tags": [
+      "microvm-probe"
+    ],
+    "urls": [
+      {
+        "default": true,
+        "hostname": "",
+        "port": 8080,
+        "status": "PENDING"
+      }
+    ]
+  }
+}

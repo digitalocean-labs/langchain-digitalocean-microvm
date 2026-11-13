@@ -1,0 +1,6 @@
+{
+  "exit_code": 3,
+  "output_encoding": "utf-8",
+  "stderr": "err\n",
+  "stdout": "out\nhello\n"
+}

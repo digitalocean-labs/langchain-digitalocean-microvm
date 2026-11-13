@@ -1,0 +1,14 @@
+{
+  "dependencies": ["../../.."],
+  "graphs": {
+    "metrics": "./graphs.py:metrics",
+    "changes": "./graphs.py:changes",
+    "infra": "./graphs.py:infra",
+    "remediator": "./graphs.py:remediator",
+    "verifier": "./graphs.py:verifier"
+  },
+  "auth": {
+    "path": "../../../images/agent-host/auth.py:auth",
+    "disable_studio_auth": true
+  }
+}

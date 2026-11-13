@@ -1,0 +1,19 @@
+{
+  "body": {
+    "error": "unauthorized",
+    "source": "sandbox-server"
+  },
+  "headers": {
+    "cf-cache-status": "<redacted>",
+    "cf-ray": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "53",
+    "content-type": "application/json",
+    "date": "<redacted>",
+    "do-upstream-service-time": "<redacted>",
+    "server": "cloudflare",
+    "x-envoy-upstream-service-time": "<redacted>"
+  },
+  "http_version": "HTTP/1.1",
+  "status": 401
+}

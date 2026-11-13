@@ -1,0 +1,18 @@
+# The specialists' agent-host image: this package (the Remediator's Action Gateway session), the Agent Server, the model client.
+# `uv lock` here after changing it; images/agent-host/build_image.py --spec specialists/image.json installs the lock.
+[project]
+name = "incident-specialists-host"
+version = "0.1.0"
+description = "Example 12's specialist agents, served by an Agent Server in MicroVM agent hosts"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+    "langchain-digitalocean-microvm[agent-host]",
+    "langchain-anthropic",
+    "httpx",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+langchain-digitalocean-microvm = { path = "../../..", editable = false }

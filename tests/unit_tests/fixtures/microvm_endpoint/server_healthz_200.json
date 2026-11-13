@@ -1,0 +1,16 @@
+{
+  "body": "ok\n",
+  "headers": {
+    "cf-cache-status": "<redacted>",
+    "cf-ray": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "3",
+    "content-type": "text/plain",
+    "date": "<redacted>",
+    "do-upstream-service-time": "<redacted>",
+    "server": "cloudflare",
+    "x-envoy-upstream-service-time": "<redacted>"
+  },
+  "http_version": "HTTP/1.1",
+  "status": 200
+}

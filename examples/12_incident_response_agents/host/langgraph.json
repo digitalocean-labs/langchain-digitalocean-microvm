@@ -1,0 +1,14 @@
+{
+  "dependencies": ["../../.."],
+  "graphs": {
+    "incident_commander": "./graph.py:graph"
+  },
+  "auth": {
+    "path": "../../../images/agent-host/auth.py:auth",
+    "disable_studio_auth": true
+  },
+  "http": {
+    "app": "./routes.py:app",
+    "enable_custom_route_auth": true
+  }
+}
