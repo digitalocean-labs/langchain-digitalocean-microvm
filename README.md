@@ -23,11 +23,15 @@ the next request. This package gives Deep Agents:
 
 Everything also runs in **local mode**: no DigitalOcean account, no network.
 
-## Try it without an account
+## Try it without a DigitalOcean account
+
+The tests need no keys. The example needs a model: `DO_MODEL_ACCESS_KEY` (DigitalOcean Serverless Inference) or
+another provider's key, see [`examples/README.md`](examples/README.md#setup).
 
 ```bash
 uv sync --all-extras
 uv run pytest                                              # unit tests: no keys, no network
+export DO_MODEL_ACCESS_KEY=...                             # or EXAMPLES_MODEL plus that provider's key
 DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py   # a deep agent in a local directory
 ```
 
@@ -35,8 +39,7 @@ DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py   # a dee
 `--full` adds 03 and 06). `uv run python scripts/check_setup.py` says, per example, what your `.env` is missing (read-only; `--offline` checks
 the variables only, `--deep` also creates, uses and deletes one throwaway MicroVM).
 
-The example needs a model: `DO_MODEL_ACCESS_KEY` (DigitalOcean Serverless Inference) or another
-provider's key, see [`examples/README.md`](examples/README.md#setup). In local mode the agent's shell
+In local mode the agent's shell
 commands run on your machine, so use a scratch checkout and read what an example does before you run it.
 
 ## Installation
