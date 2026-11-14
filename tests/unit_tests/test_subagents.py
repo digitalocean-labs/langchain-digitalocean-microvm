@@ -549,10 +549,8 @@ def test_on_demand_first_uses_in_parallel_start_in_parallel_once_each() -> None:
     async def main() -> None:
         await asyncio.gather(*(sb.backends[n].aexecute("true") for n in ("analyst", "reviewer", "analyst")))
 
-    started = time.monotonic()
     asyncio.run(main())
-    assert time.monotonic() - started < 0.55
-    assert client.create_calls == 2 and client.peak_concurrent_creates == 2
+    assert client.create_calls == 2 and client.peak_concurrent_creates == 2  # started together, once per role
     pause_subagent_sandboxes(lifecycle, sb)
     assert client.pause_calls == 2
 

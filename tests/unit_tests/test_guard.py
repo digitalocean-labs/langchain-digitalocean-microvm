@@ -89,10 +89,12 @@ def test_guard_exits_with_the_childs_code_and_forwards_signals() -> None:
         [sys.executable, str(GUARD_PATH), "--parent", str(os.getpid()), "--interval", "0.1", "--", *_child_command(marker)],
         start_new_session=True,
     )
+    # The guard's own argv carries the marker too, so wait for two processes (the guard and its child): by then the
+    # guard has started the child and installed its signal handlers.
     deadline = time.monotonic() + 10.0
-    while not _pgrep(marker) and time.monotonic() < deadline:
+    while len(_pgrep(marker)) < 2 and time.monotonic() < deadline:
         time.sleep(0.1)
-    assert _pgrep(marker), "child never started"
+    assert len(_pgrep(marker)) >= 2, "child never started"
     guard.send_signal(signal.SIGTERM)
     _wait_gone(marker, timeout=10.0)
     assert guard.wait(timeout=10) == 128 + signal.SIGTERM  # the child died by the forwarded SIGTERM
