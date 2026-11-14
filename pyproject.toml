@@ -71,6 +71,9 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
+# filelock is only a transitive dependency (deepagents-code). With filelock 4, the resolver falls back to
+# deepagents-code 0.0.1 on Python 3.12 and 3.13, which lacks the module the dcode provider imports.
+constraint-dependencies = ["filelock<4"]
 # Rebuild this package when its sources change, not only its pyproject.toml (uv's default): the agent-host images
 # install it as a wheel built from this checkout (images/agent-host/build_image.py).
 cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.py" }, { file = "src/**/*.typed" }]
