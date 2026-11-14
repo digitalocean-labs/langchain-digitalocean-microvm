@@ -22,7 +22,7 @@ import secrets
 from typing import Any
 
 try:
-    from deepagents_code.integrations.sandbox_provider import (
+    from deepagents_code.integrations.sandbox_provider import (  # pyright: ignore[reportMissingImports]
         SandboxError,
         SandboxNotFoundError,
         SandboxProvider,
