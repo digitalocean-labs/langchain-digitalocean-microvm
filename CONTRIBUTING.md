@@ -92,4 +92,4 @@ automatic result. Run `uv run ruff check .` and `uv run pytest` before you push.
 
 - One change per pull request, with tests (local mode where possible).
 - `uv run ruff check .` and `uv run pytest` pass.
-- Add a line to `CHANGELOG.md` for user-visible changes.
+- Add a line to `CHANGELOG.md` for user-visible changes, under an "Unreleased" heading at the top (add the heading if it is missing).
