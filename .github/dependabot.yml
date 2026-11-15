@@ -1,0 +1,54 @@
+# Dependency updates. One grouped weekly PR per area for minor and patch bumps; major bumps are
+# ignored (open one by hand). A bump that changes a uv.lock needs a look at the resolved versions
+# of deepagents and deepagents-code, not only a green CI run.
+version: 2
+
+updates:
+  # The package: pyproject.toml and uv.lock.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      python-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # The agent-host image: its own lock file, and a rebuild of the image after every change.
+  - package-ecosystem: uv
+    directory: /images/agent-host
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      agent-host-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # The example 12 images (commander host and specialists): own lock files, rebuilt after every change.
+  - package-ecosystem: uv
+    directories:
+      - /examples/12_incident_response_agents/host
+      - /examples/12_incident_response_agents/specialists
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      example-images-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
