@@ -48,8 +48,9 @@ Issues = "https://github.com/digitalocean-labs/langchain-digitalocean-microvm/is
 test = [
     "pytest>=8.0",
     "langchain-tests>=1.1.9",
-    # Needs Python 3.12+; on 3.11 its placeholder release would pin deepagents to an old 0.7.
-    "deepagents-code; python_full_version >= '3.12'",
+    # Needs Python 3.12+; on 3.11 its placeholder release would pin deepagents to an old 0.7. The lower bound keeps
+    # every resolver off the 0.0.1 placeholder, which has no `integrations` module (the dcode provider imports it).
+    "deepagents-code>=0.1; python_full_version >= '3.12'",
     "python-dotenv",
 ]
 # Example agents and the agent-host template's graphs.
