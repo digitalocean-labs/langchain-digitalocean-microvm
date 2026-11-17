@@ -17,7 +17,7 @@ through the broker in both modes: the relay holds its session, asks the human an
 holds no gateway credential. Local mode (DO_INCIDENT_WORLD_URL set): the read-only roles' actions run on the one simulated world
 the relay serves (incident_common/world_server.py), through the package's local gateway with the same allow lists.
 
-Environment (HostSpec.env): SUBAGENT_MODEL, DO_MODEL_ACCESS_KEY (or EXAMPLES_MODEL), DO_INCIDENT_URL / _DROPLET_ID / _REPO
+Environment (HostSpec.env): SUBAGENT_MODEL with DO_MODEL_ACCESS_KEY (otherwise EXAMPLES_MODEL and the provider's key), DO_INCIDENT_URL / _DROPLET_ID / _REPO
 (the service), DO_INCIDENT_WORLD_URL (local), DO_INCIDENT_BROKER_URL / _ID / _BROKER_TOKEN (the broker: the read-only roles in
 real mode, the Remediator in both).
 """

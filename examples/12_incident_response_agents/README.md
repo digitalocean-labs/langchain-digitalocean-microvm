@@ -166,8 +166,9 @@ DO_MICROVM_TRANSPORT=local uv run examples/12_incident_response_agents/console.p
 ```
 
 Every host is a local `langgraph dev` (the commander's serving `host/`, each specialist's serving `specialists/`). With
-`DO_MODEL_ACCESS_KEY` the agents use DigitalOcean Serverless Inference; without it, `EXAMPLES_MODEL` (see
-[`../README.md`](../README.md)). The demo deletes every host it started when it ends.
+`DO_MODEL_ACCESS_KEY` the agents use DigitalOcean Serverless Inference and the hosts get only that key; without it, the
+hosts get `EXAMPLES_MODEL` (`EXAMPLES_STRONG_MODEL` for the commander and the Change Analyst) and your provider's API key
+(see [`../README.md`](../README.md)). The demo deletes every host it started when it ends.
 
 You do not start `langgraph dev` yourself here: the relay and the commander start the hosts, and `host/` and
 `specialists/` are their templates, not a graph to serve by hand.
