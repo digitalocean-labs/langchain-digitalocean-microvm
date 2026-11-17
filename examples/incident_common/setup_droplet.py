@@ -5,7 +5,7 @@
     uv run examples/incident_common/setup_droplet.py --verify-restore # deploy-bad, restore from the snapshot, wait for health
     uv run examples/incident_common/setup_droplet.py --cleanup        # delete the droplet, the snapshot and the ssh key
 
-Everything goes through an Action Gateway session of its own (DO_ACTION_GATEWAY_TOKEN, DO_ACTION_GATEWAY_ACTOR_ID, the
+Everything goes through an Action Gateway endpoint of its own (DO_ACTION_GATEWAY_TOKEN, DO_ACTION_GATEWAY_ACTOR_ID, the
 actor's DigitalOcean connection), so the droplet is created in the account that connection belongs to: the droplet
 `incident-svc` (s-1vcpu-1gb in sfo2 unless DO_INCIDENT_SIZE, DO_INCIDENT_REGION), the snapshot `incident-good`, the ssh key `incident-key` (a temporary key pair kept
 under outputs/). The gateway's `droplet-create` has no first-boot script, so the service is installed over ssh: the droplet
@@ -52,10 +52,10 @@ IMAGE = "ubuntu-24-04-x64"
 SIZE = os.environ.get("DO_INCIDENT_SIZE", "s-1vcpu-1gb")
 REGION = os.environ.get("DO_INCIDENT_REGION", "sfo2")  # another region when the size is not available in this one
 TOOLS = [
-    "digitalocean_key-create@2", "digitalocean_key-delete@3", "digitalocean_droplet-create@3", "digitalocean_droplet-get@3",
-    "digitalocean_droplet-delete@3", "digitalocean_snapshot-droplet@3", "digitalocean_image-list@2", "digitalocean_image-delete@2",
-    "github_list_commits@5", "digitalocean_shutdown-droplet@3", "digitalocean_power-off-droplet@3", "digitalocean_power-on-droplet@3",
-    "digitalocean_restore-droplet@3",
+    "digitalocean_key-create", "digitalocean_key-delete", "digitalocean_droplet-create", "digitalocean_droplet-get",
+    "digitalocean_droplet-delete", "digitalocean_snapshot-droplet", "digitalocean_image-list", "digitalocean_image-delete",
+    "github_list_commits", "digitalocean_shutdown-droplet", "digitalocean_power-off-droplet", "digitalocean_power-on-droplet",
+    "digitalocean_restore-droplet",
 ]
 SSH = ["ssh", "-i", str(KEY), "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR"]
 

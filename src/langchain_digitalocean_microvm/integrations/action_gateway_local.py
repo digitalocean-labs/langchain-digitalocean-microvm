@@ -1,6 +1,6 @@
 """In-memory Action Gateway for local mode and tests: no credentials, no network.
 
-Follows the standalone gateway's rules: the session policy decides `allow`, `ask` or `deny`; an
+Follows the gateway's rules: the endpoint's policy decides `allow`, `ask` or `deny`; an
 `ask` call answers `requires_approval` with an approval id and a decide path; an approval covers
 one repeat of the same arguments, once; a denied call fails; an action that needs a connection
 answers with a connect link until `connect()` is called.
@@ -56,7 +56,7 @@ class LocalActionGatewayClient:
         self.actions = dict(DEFAULT_ACTIONS if actions is None else actions)
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.invokes: list[tuple[str, dict[str, Any]]] = []
-        self.sessions: dict[str, dict[str, Any]] = {}
+        self.endpoints: dict[str, dict[str, Any]] = {}
         self.decisions: list[tuple[str, str]] = []
         self._connected: set[str] = set()
         self._approvals: dict[str, dict[str, Any]] = {}
@@ -72,36 +72,36 @@ class LocalActionGatewayClient:
         self._approvals[approval_id]["state"] = "expired"
 
     # GatewayClient
-    def create_session(self, name: str, tools: Sequence[str], policy: Mapping[str, Any], actor_id: str | None) -> str:
-        urn = f"do:action-gateway:session:local{next(self._ids)}"
-        self.sessions[urn] = {"name": name, "tools": [t.split("@")[0] for t in tools], "policy": dict(policy), "actor_id": actor_id,
-                              "created_at": time.time()}
-        return urn
+    def create_endpoint(self, name: str, tools: Sequence[str], policy: Mapping[str, Any], actor_id: str | None) -> str:
+        endpoint_id = f"local-{next(self._ids)}"
+        self.endpoints[endpoint_id] = {"name": name, "tools": [t.split("@")[0] for t in tools], "policy": dict(policy),
+                                       "actor_id": actor_id, "created_at": time.time()}
+        return endpoint_id
 
-    def list_sessions(self, *, prefix: str | None = None) -> list[dict[str, Any]]:
-        """The sessions as `ActionGatewayClient.list_sessions` returns them (`sessionUrn`, `name`, `createdAt`)."""
-        return [{"sessionUrn": urn, "name": s["name"],
-                 "createdAt": datetime.fromtimestamp(s["created_at"], UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}
-                for urn, s in list(self.sessions.items()) if prefix is None or s["name"].startswith(prefix)]
+    def list_endpoints(self, *, prefix: str | None = None) -> list[dict[str, Any]]:
+        """The endpoints as `ActionGatewayClient.list_endpoints` returns them (`id`, `name`, `actor_id`, `created_at`)."""
+        return [{"id": endpoint_id, "name": e["name"], "actor_id": e["actor_id"],
+                 "created_at": datetime.fromtimestamp(e["created_at"], UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}
+                for endpoint_id, e in list(self.endpoints.items()) if prefix is None or e["name"].startswith(prefix)]
 
-    def delete_session(self, urn: str) -> None:
-        self.sessions.pop(urn, None)
+    def delete_endpoint(self, endpoint_id: str) -> None:
+        self.endpoints.pop(endpoint_id, None)
 
     def close(self) -> None:
         self.closed = True
 
-    def _session(self, session_id: str) -> dict[str, Any]:
-        for urn, session in self.sessions.items():
-            if urn.rsplit(":", 1)[-1] == session_id:
-                return session
-        raise ActionGatewayError("session not found", 404)
+    def _endpoint(self, endpoint_id: str) -> dict[str, Any]:
+        endpoint = self.endpoints.get(endpoint_id)
+        if endpoint is None:
+            raise ActionGatewayError("endpoint not found", 404)
+        return endpoint
 
-    def search(self, session_id: str, query: str, limit: int) -> list[dict[str, Any]]:
-        session = self._session(session_id)
+    def search(self, endpoint_id: str, query: str, limit: int) -> list[dict[str, Any]]:
+        endpoint = self._endpoint(endpoint_id)
         words = query.lower().split()
         found = [
             {"name": name, "description": self.actions[name].description, "inputSchema": self.actions[name].input_schema}
-            for name in session["tools"]
+            for name in endpoint["tools"]
             if name in self.actions and all(w in f"{name} {self.actions[name].description}".lower() for w in words)
         ]
         return found[:limit]
@@ -113,16 +113,16 @@ class LocalActionGatewayClient:
                 return str(rule["action"])
         return str(policy.get("defaultAction", "deny"))
 
-    def invoke(self, session_id: str, tool: str, arguments: Mapping[str, Any], rationale: str) -> dict[str, Any]:
-        session = self._session(session_id)
+    def invoke(self, endpoint_id: str, tool: str, arguments: Mapping[str, Any], rationale: str) -> dict[str, Any]:
+        endpoint = self._endpoint(endpoint_id)
         arguments = dict(arguments)
         with self._lock:
             self.invokes.append((tool, arguments))
-            if tool not in session["tools"] or tool not in self.actions:
+            if tool not in endpoint["tools"] or tool not in self.actions:
                 return {"status": "error", "error": {"message": f"unknown tool {tool}"}}
-            action = self._rule(session["policy"], tool)
+            action = self._rule(endpoint["policy"], tool)
             if action == "deny":
-                return {"status": "error", "error": {"message": f"{tool} is denied by the session policy"}}
+                return {"status": "error", "error": {"message": f"{tool} is denied by the endpoint's policy"}}
             if action == "ask":
                 key = json.dumps([tool, arguments], sort_keys=True)
                 approval = next((a for a in self._approvals.values() if a["key"] == key and a["state"] != "used"), None)
@@ -136,7 +136,7 @@ class LocalActionGatewayClient:
                             "status": "requires_approval",
                             "approval_id": approval["id"],
                             "expires_at": "in 30 minutes",
-                            "decide": {"path": f"/approvals/session/{session_id}/{approval['id']}"},
+                            "decide": {"path": f"/approvals/endpoint/{endpoint_id}/{approval['id']}"},
                         },
                     }
                 if approval["state"] == "denied":
@@ -149,8 +149,8 @@ class LocalActionGatewayClient:
             self.calls.append((tool, arguments))
             return {"status": "success", "output": spec.run(arguments)}
 
-    def decide(self, session_id: str, path: str | None, approval_id: str, decision: str) -> None:
-        self._session(session_id)
+    def decide(self, endpoint_id: str, path: str | None, approval_id: str, decision: str) -> None:
+        self._endpoint(endpoint_id)
         with self._lock:
             approval = self._approvals.get(approval_id)
             if approval is None or approval["state"] != "pending":

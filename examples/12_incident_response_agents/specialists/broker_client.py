@@ -1,6 +1,6 @@
 """A specialist's Action Gateway actions, through the relay's broker (relay.py, `POST /incidents/{id}/actions/{role}`).
 
-The relay holds the gateway token and one allow-only gateway session per role. This host holds only a token for its own role
+The relay holds the gateway token and one allow-only gateway endpoint per role. This host holds only a token for its own role
 in its own incident (DO_INCIDENT_BROKER_TOKEN, set by the commander's gateway when it created the host), valid while the
 incident is open. The broker answers three requests, each a JSON object:
 
@@ -11,7 +11,7 @@ incident is open. The broker answers three requests, each a JSON object:
 `broker_tools(role)` lists the role's actions once and gives one LangChain tool per action, named after it and with its input
 schema; each call is one `invoke`.
 
-The Remediator's tools (`remediator_tools`) are `action_search` and `action_invoke` on its incident's session in the relay. An
+The Remediator's tools (`remediator_tools`) are `action_search` and `action_invoke` on its incident's endpoint in the relay. An
 `invoke` of an action the policy asks a human about runs nothing and answers {"approval": {...}}: the tool then pauses the run
 with an `action_approval` interrupt. The relay shows it to a human, posts the decision to the gateway with its own token and,
 once approved, runs the action; then it resumes the run, and the same request (the same tool call id) answers the outcome. The
@@ -103,7 +103,7 @@ MAX_ASKS = 3  # approvals one tool call may wait on: a relay restarted since it 
 
 
 def remediator_tools(*, environ: dict[str, str] | None = None, transport: httpx.AsyncBaseTransport | None = None) -> list[BaseTool]:
-    """`action_search` and `action_invoke` on the Remediator's session in the relay (its policy is the relay's)."""
+    """`action_search` and `action_invoke` on the Remediator's endpoint in the relay (its policy is the relay's)."""
 
     async def action_search(query: str, limit: int = 5) -> str:
         try:

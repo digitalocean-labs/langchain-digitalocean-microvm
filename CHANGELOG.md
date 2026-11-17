@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+**Breaking**
+
+- Action Gateway tools use endpoints instead of sessions: `ActionGateway` creates an endpoint with its tools and policy (`POST /v2/action-gateway/endpoints`) and calls it with `X-Endpoint-Id` on the data plane the endpoint's `mcp_url` names (only `https` hosts on `do-ai.run` / `do-ai-test.run`; `DO_ACTION_GATEWAY_DATA_URL` or `data_url=` overrides). Renamed: `session_prefix=` to `endpoint_prefix=`, `session_id` to `endpoint_id`, `SESSION_PREFIX` to `ENDPOINT_PREFIX`, `ActionGatewayClient.list_sessions` / `delete_session` to `list_endpoints` / `delete_endpoint`, and `GatewayClient.create_session` / `delete_session` to `create_endpoint` / `delete_endpoint` (custom clients must rename them). `LocalActionGatewayClient` follows.
+
+**Changed**
+
+- Tool slugs need no version: a slug without `@version` gets the released one. The examples' policies and tool lists no longer pin versions; `name@version` still pins one.
+- `scripts/check_setup.py --deep` calls one read-only action through a throwaway `microvm-ag-check-*` endpoint and deletes it.
+- `scripts/smoke_action_gateway.py --slug-version` is optional (default: no pin).
+
 ## 0.1.0
 
 First release. Supports `deepagents>=0.7.0,<0.8.0`.

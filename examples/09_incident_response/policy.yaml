@@ -1,11 +1,12 @@
 # The incident commander's Action Gateway policy (gateway.py loads it with ActionPolicy.from_yaml).
-# Three tiers; anything not listed is denied. Versions are the catalog's released versions.
+# Three tiers; anything not listed is denied.
+# Tool names carry no version: the gateway uses the released one (name@version pins one).
 allow:                                # the investigators read
-  - github_list_commits@5
-  - github_compare_commits@4
-  - digitalocean_droplet-get@3
-  - digitalocean_image-list@2
+  - github_list_commits
+  - github_compare_commits
+  - digitalocean_droplet-get
+  - digitalocean_image-list
 ask:                                  # a human decides first: the run ends with an `action_approval` interrupt
-  - digitalocean_restore-droplet@3
+  - digitalocean_restore-droplet
 deny:                                 # refused by the gateway, whoever asks
-  - digitalocean_droplet-delete@3
+  - digitalocean_droplet-delete

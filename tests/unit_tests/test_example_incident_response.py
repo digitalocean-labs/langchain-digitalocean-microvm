@@ -126,7 +126,7 @@ def test_commits_made_in_the_same_second_keep_the_api_order(example) -> None:
 
 def test_the_policy_has_one_ask_and_one_deny(example) -> None:
     policy = sys.modules["gateway"].POLICY
-    assert list(policy.ask) == ["digitalocean_restore-droplet@3"] and list(policy.deny) == ["digitalocean_droplet-delete@3"]
+    assert list(policy.ask) == ["digitalocean_restore-droplet"] and list(policy.deny) == ["digitalocean_droplet-delete"]
     bare = {n.split("@")[0] for n in [*policy.allow, *policy.ask, *policy.deny]}
     assert bare <= set(example.service.actions())
 
@@ -240,7 +240,7 @@ def test_a_refusal_is_reported_alone_without_another_way(example) -> None:
     assert "whatever you think of it" in example.SYSTEM_PROMPT  # a human's request goes to the remediator; the policy decides
 
 
-def test_the_preflight_opens_a_session_so_a_stale_version_fails_before_a_run(example, monkeypatch) -> None:
+def test_the_preflight_creates_an_endpoint_so_a_stale_version_fails_before_a_run(example, monkeypatch) -> None:
     prepare = importlib.import_module("prepare")
     from langchain_digitalocean_microvm.integrations.action_gateway import (
         ActionGatewayError,
@@ -263,11 +263,11 @@ def test_the_preflight_opens_a_session_so_a_stale_version_fails_before_a_run(exa
             return False
 
     monkeypatch.setattr(prepare, "ActionGateway", Gateway)
-    ok, detail = prepare.session_opens(["github_list_commits@5", "digitalocean_droplet-get@3"])
+    ok, detail = prepare.endpoint_opens(["github_list_commits", "digitalocean_droplet-get"])
     assert ok and "2 tools" in detail
-    ok, detail = prepare.session_opens(["github_list_commits@4"])
+    ok, detail = prepare.endpoint_opens(["github_list_commits@4"])
     assert not ok and 'released version "5"' in detail and "policy.yaml" in detail
-    assert opened == [["github_list_commits@5", "digitalocean_droplet-get@3"], ["github_list_commits@4"]]
+    assert opened == [["github_list_commits", "digitalocean_droplet-get"], ["github_list_commits@4"]]
 
 
 def test_only_the_remediator_holds_the_action_tools(example, monkeypatch) -> None:
@@ -422,13 +422,13 @@ def test_setup_shows_the_connect_link_instead_of_failing_outside_a_graph(example
     link = "https://cloud.digitalocean.com/security/connectlinks/confirm?token=t"
     connected = []
 
-    def invoke(session_id, tool, arguments, rationale):
+    def invoke(endpoint_id, tool, arguments, rationale):
         if not connected:
             return {"error": {"message": f"connect your account: {link}"}}
         return {"output": {"commits": [{"sha": "b" * 40}, {"sha": "a" * 40}]}}
 
     gateway = setup.ActionGateway(setup.ActionPolicy(allow=["github_list_commits@5"]), tools=["github_list_commits@5"],
-                                  client=SimpleNamespace(create_session=lambda *a: "urn:s", delete_session=lambda urn: None,
+                                  client=SimpleNamespace(create_endpoint=lambda *a: "ep-1", delete_endpoint=lambda endpoint_id: None,
                                                          invoke=invoke, close=lambda: None))
     monkeypatch.setattr(setup.sys.stdin, "isatty", lambda: False)
     with pytest.raises(SystemExit, match="no connection for this action yet. Open https://cloud"):

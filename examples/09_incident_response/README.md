@@ -106,7 +106,7 @@ this example is not affiliated with or endorsed by it.
 | `tools.py` | The investigators' tools (fetch evidence into the MicroVM, run a script there) and the verifier's `sample_health` / `judge_health`; the commander only saves the postmortem |
 | `run_script.py` | Console: streams the run, shows each approval with the facts it read itself, answers it |
 | `dashboard.py` | Second screen: the MicroVM tiles, the droplet's health, the gateway audit |
-| `prepare.py` | Pre-flight: configuration, template, models, and (real mode) a gateway session opened and closed, so an action version the catalog no longer releases fails here, naming the one it does; `--clean` removes old investigator MicroVMs |
+| `prepare.py` | Pre-flight: configuration, template, models, and (real mode) a gateway endpoint created and deleted, so a tool the catalog does not offer, or a pinned version it no longer releases, fails here; `--clean` removes old investigator MicroVMs |
 | `approvals.py` | The approval prompt and the facts the console reads itself |
 | `../incident_common/` | The incident scenario, shared ([README](../incident_common/README.md)): `world.py` (the simulated world; links to `code-host.mock`, which does not exist), `sandbox/` (`series.py`: when did the errors start; `timeline.py`: what changed; `verdict.py`: is the service healthy again; seeded into the template under `/tools/`), `service/` (the droplet's service and the two-commit demo repository), `setup_droplet.py`, `events.py`, `models.py` |
 
@@ -152,7 +152,7 @@ uv run examples/09_incident_response/run_script.py --delete         # terminal 1
 uv run examples/incident_common/setup_droplet.py --cleanup          # deletes the droplet, the snapshot and the ssh key
 ```
 
-`incident_common/setup_droplet.py` works through an Action Gateway session of its own, so it creates in the account the actor's
+`incident_common/setup_droplet.py` works through an Action Gateway endpoint of its own, so it creates in the account the actor's
 DigitalOcean connection belongs to: one droplet `incident-svc` (`s-1vcpu-1gb` in `sfo2`, Ubuntu, tag `incident-example`; `DO_INCIDENT_SIZE` and `DO_INCIDENT_REGION` choose another where that size is not offered),
 one ssh key `incident-key` (a temporary key pair under `incident_common/outputs/`) and, once the service is installed, one snapshot
 `incident-good`. The gateway's `droplet-create` takes no first-boot script, so the service is installed over ssh: the
@@ -163,7 +163,7 @@ the other scripts load. `--cleanup` deletes the droplet, the snapshot and the ke
 until then.
 
 The template's checkpoint is kept for the next run (it does not count against the team limit); `scripts/delete_all.py`
-lists and deletes the MicroVMs a killed run left behind. A killed run can also leave its Action Gateway session, named
+lists and deletes the MicroVMs a killed run left behind. A killed run can also leave its Action Gateway endpoint, named
 `microvm-ag-*`.
 
 ## Run with `langgraph dev` (Studio, agent-chat-ui)

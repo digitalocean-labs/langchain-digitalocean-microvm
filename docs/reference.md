@@ -528,14 +528,14 @@ deepagents-code is installed:
 ## Action Gateway tools (a supervisor outside any sandbox)
 
 `integrations/action_gateway.py` gives a deep agent running in your own process DigitalOcean and
-third-party actions through a standalone Action Gateway session. It is independent of the sandbox
+third-party actions through an Action Gateway endpoint of its own. It is independent of the sandbox
 classes and unrelated to the agent-host gateway; it needs no extra.
 
 ```python
 from langchain_digitalocean_microvm.integrations.action_gateway import ActionGateway, ActionPolicy
 
 policy = ActionPolicy(allow=["exa_web_search"], ask=["digitalocean_droplet-create"])
-with ActionGateway(policy, tools=["exa_web_search@14", "digitalocean_droplet-create@3"]) as gateway:
+with ActionGateway(policy) as gateway:  # the endpoint's tools: the names in allow and ask
     agent = create_deep_agent(tools=gateway.tools(), checkpointer=checkpointer)
 ```
 
@@ -544,26 +544,33 @@ with ActionGateway(policy, tools=["exa_web_search@14", "digitalocean_droplet-cre
   default the part of your DigitalOcean email before the `@`, up to 64 letters, digits, `.`, `_` and
   `-`, and your user UUID if the email gives nothing usable. `DO_MICROVM_TRANSPORT=local` (or
   `client=LocalActionGatewayClient()`) runs everything in memory.
+- **Endpoints.** The gateway is reached through an endpoint: `POST /v2/action-gateway/endpoints` creates one with its
+  first version (the tools, the policy and the actor), which is active at once. Calls go to the data plane the endpoint's
+  `mcp_url` names (`https://actions.do-ai.run`: `POST /tools/invoke`, `POST /tools/search`, approvals), with the
+  header `X-Endpoint-Id`. The client accepts only an `https` host on `do-ai.run` or `do-ai-test.run`; for anything else it
+  deletes the endpoint and raises `ActionGatewayError`. `DO_ACTION_GATEWAY_DATA_URL` (or `data_url=`) sends every call
+  to one host instead.
 - **Policy.** `ActionPolicy(allow=, ask=, deny=)` lists tool names without versions; everything else
-  is denied. `action_search` and `action_invoke` are always allowed, as the session policy needs.
-  `tools=` lists the session's slugs with versions (`name@version`, matching the released version);
-  by default the names in `allow` and `ask`.
+  is denied. `action_search` and `action_invoke` are always allowed, as the endpoint's policy needs.
+  `tools=` lists the endpoint's slugs, by default the names in `allow` and `ask`. A slug without a version
+  (`github_list_commits`) gets the released version; `name@version` pins one, and the endpoint is refused when the
+  catalog no longer releases it.
 - **Policy as a file.** `ActionPolicy.from_yaml(path)` (a path or an open text stream; a `str` is a path, never YAML text)
   and `ActionPolicy.from_mapping(dict)` build the same policy from data:
 
   ```yaml
   # policy.yaml: three lists of tool names; the default is always deny
-  allow: [github_list_commits@5, digitalocean_droplet-get@3]
-  ask: [digitalocean_restore-droplet@3]
-  deny: [digitalocean_droplet-delete@3]
+  allow: [github_list_commits, digitalocean_droplet-get]
+  ask: [digitalocean_restore-droplet]
+  deny: [digitalocean_droplet-delete]
   ```
 
-  Entries are kept as written, versions included, so the lists can also feed `tools=`
-  (`ActionGateway(policy, tools=[*policy.allow, *policy.ask, *policy.deny])`); the session policy drops the versions.
+  Entries are kept as written, with a version where one is pinned, so the lists can also feed `tools=`
+  (`ActionGateway(policy, tools=[*policy.allow, *policy.ask, *policy.deny])`); the endpoint's policy drops the versions.
   The loader raises `ValueError`, naming the file, for an unknown key (`default`, `rules` and `permissions` get a hint),
   a value that is not a list of names, a `do.actions/` prefix, `action_search` or `action_invoke`, and a tool that is
   listed twice or in two tiers. It reads plain YAML only (`yaml.safe_load`). The Python constructor does not run these checks.
-- **Tools.** `gateway.tools()` returns `action_search` (the session's tools that fit a plain-English
+- **Tools.** `gateway.tools()` returns `action_search` (the endpoint's tools that fit a plain-English
   description of the task) and `action_invoke` (`tool`, `arguments`, `rationale`); `preload=[slug, ...]`
   adds one direct tool per slug with its own input schema, and `tools(meta=False)` returns only those.
   Sync and async.
@@ -589,18 +596,18 @@ with ActionGateway(policy, tools=["exa_web_search@14", "digitalocean_droplet-cre
   not connected yet, an approved call may not run and the connect interrupt follows; after connecting,
   the resumed tool requests a fresh approval, which the
   decision already given answers.
-- **Lifecycle.** The session opens on first use and is deleted by `close()`, the context manager
-  (`with` / `async with`) or the garbage collector. A process killed before that leaves its session
-  behind; the package's clean-up scripts do not list these sessions.
-- **Session names.** A session is named `session_prefix` plus 8 random hex digits; the default prefix
-  is `microvm-ag-` (`SESSION_PREFIX`). Give each owner a prefix of its own (`ActionGateway(policy,
-  session_prefix="microvm-ag-<job>-")`), and another process can find what a killed one left:
-  `ActionGatewayClient(token).list_sessions(prefix=...)` returns every session the token can see
-  whose name starts with the prefix (`sessionUrn`, `name`, `createdAt`, ...; the client reads every
-  page and filters), and `delete_session(urn)` deletes one.
-  `LocalActionGatewayClient` lists its sessions the same way.
-- **Live check.** `scripts/smoke_action_gateway.py` drives one session against the real service
-  (needs a terminal).
+- **Lifecycle.** The endpoint is created on first use and deleted by `close()`, the context manager
+  (`with` / `async with`) or the garbage collector. A process killed before that leaves its endpoint
+  behind; the package's clean-up scripts do not list these endpoints.
+- **Endpoint names.** An endpoint is named `endpoint_prefix` plus 8 random hex digits; the default prefix
+  is `microvm-ag-` (`ENDPOINT_PREFIX`). `gateway.endpoint_id` is its id once created. Give each owner a prefix of its
+  own (`ActionGateway(policy, endpoint_prefix="microvm-ag-<job>-")`), and another process can find what a killed one
+  left: `ActionGatewayClient(token).list_endpoints(prefix=...)` returns every endpoint the token can see whose name
+  starts with the prefix (`id`, `name`, `actor_id`, `created_at`, ...; the client reads every page and filters), and
+  `delete_endpoint(endpoint_id)` deletes one. `LocalActionGatewayClient` lists its endpoints the same way.
+- **Live check.** `scripts/check_setup.py --deep` calls one read-only action through a throwaway
+  `microvm-ag-check-*` endpoint and deletes it. `scripts/smoke_action_gateway.py` drives one endpoint through
+  an allowed call, a connect link and an approval (needs a terminal).
 
 ## Where state lives
 

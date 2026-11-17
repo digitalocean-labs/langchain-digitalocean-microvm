@@ -82,7 +82,7 @@ logger = logging.getLogger(__name__)
 lifecycle = DemoLifecycle()
 LOCAL = lifecycle.config.transport == "local"
 service = make_service(LOCAL)  # the simulated world, or the real service named by DO_INCIDENT_*
-gateway = make_gateway(service, local=LOCAL)  # opened on first use; one session for every run of this process
+gateway = make_gateway(service, local=LOCAL)  # created on first use; one endpoint for every run of this process
 
 # The investigators have no shell (tools.FilesOnly): their tools fetch the evidence and run the scripts in their MicroVMs.
 NO_SHELL = (
@@ -264,7 +264,7 @@ async def team_sandboxes(thread_id: str):
 # https://docs.langchain.com/langsmith/graph-rebuild#context-manager-factory
 @contextlib.asynccontextmanager
 async def make_graph(config: RunnableConfig, runtime: ServerRuntime):
-    # Built in a thread: in real mode the gateway's tools open its session with a synchronous request, which the
+    # Built in a thread: in real mode the gateway's tools create its endpoint with a synchronous request, which the
     # Agent Server refuses on its event loop unless it runs with --allow-blocking.
     if not runtime.execution_runtime:
         yield await asyncio.to_thread(build_commander, None)

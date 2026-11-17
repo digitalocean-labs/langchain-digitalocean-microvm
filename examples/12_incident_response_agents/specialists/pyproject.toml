@@ -1,4 +1,4 @@
-# The specialists' agent-host image: this package (the Remediator's Action Gateway session), the Agent Server, the model client.
+# The specialists' agent-host image: this package (the Remediator's Action Gateway endpoint), the Agent Server, the model client.
 # `uv lock` here after changing it; images/agent-host/build_image.py --spec specialists/image.json installs the lock.
 [project]
 name = "incident-specialists-host"

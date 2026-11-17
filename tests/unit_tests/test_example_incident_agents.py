@@ -142,7 +142,7 @@ def test_a_paused_sub_agent_is_waiting_and_its_gateway_calls_are_classified(exam
     call = lambda cid, tool: {"type": "ai", "tool_calls": [{"id": cid, "name": "action_invoke", "args": {"tool": tool, "arguments": {"ID": 1}}}]}  # noqa: E731
     answer = lambda cid, text: {"type": "tool", "tool_call_id": cid, "content": text}  # noqa: E731
     messages = [call("a", "digitalocean_restore-droplet@3"), answer("a", '{"action": {"id": 9, "status": "in-progress"}}'),
-                call("b", "digitalocean_droplet-delete"), answer("b", "Error: digitalocean_droplet-delete is denied by the session policy"),
+                call("b", "digitalocean_droplet-delete"), answer("b", "Error: digitalocean_droplet-delete is denied by the endpoint's policy"),
                 call("c", "digitalocean_restore-droplet"), answer("c", "The user denied this action. It did not run.")]
     assert [(c["tool"], c["status"]) for c in routes.gateway_calls(messages)] == [
         ("digitalocean_restore-droplet", "approved"), ("digitalocean_droplet-delete", "deny"), ("digitalocean_restore-droplet", "denied")]
@@ -234,21 +234,21 @@ def test_fake_specialists_hold_only_their_own_actions_on_the_one_world(example, 
         server.should_exit = True
 
 
-def test_the_remediators_session_is_the_relays_named_per_incident_and_listed_on_the_world(example) -> None:
+def test_the_remediators_endpoint_is_the_relays_named_per_incident_and_listed_on_the_world(example) -> None:
     world_module = importlib.import_module("incident_common.world")
     server_module = importlib.import_module("incident_common.world_server")
     relay_module = importlib.import_module("relay")
     world = world_module.SimulatedWorld()
     url, server = server_module.serve(world)
-    broker = relay_module.Broker(b"k" * 32, "http://127.0.0.1:1", lambda: server_module.WorldSessionsClient(url, actions=world.actions()),
+    broker = relay_module.Broker(b"k" * 32, "http://127.0.0.1:1", lambda: server_module.WorldEndpointsClient(url, actions=world.actions()),
                                  lambda i: True)
     try:
-        broker.answer("abcd1234", "remediator", {"op": "search", "query": "restore"})  # opens the incident's session
-        listed = server_module.WorldSessionsClient(url)
-        (session,) = listed.list_sessions(prefix="microvm-ag-abcd1234-remediator-")
-        assert listed.list_sessions(prefix="microvm-ag-ffff0000-") == []
+        broker.answer("abcd1234", "remediator", {"op": "search", "query": "restore"})  # creates the incident's endpoint
+        listed = server_module.WorldEndpointsClient(url)
+        (endpoint,) = listed.list_endpoints(prefix="microvm-ag-abcd1234-remediator-")
+        assert listed.list_endpoints(prefix="microvm-ag-ffff0000-") == []
         broker.forget("abcd1234")  # closing the incident deletes it
-        assert listed.list_sessions() == []
+        assert listed.list_endpoints() == []
     finally:
         broker.close()
         server.should_exit = True
@@ -337,14 +337,14 @@ def test_the_broker_limits_each_roles_requests_per_minute(broker) -> None:
     assert limited._recent == {}
 
 
-def test_each_role_gets_an_allow_only_session_with_its_own_actions(broker) -> None:
+def test_each_role_gets_an_allow_only_endpoint_with_its_own_actions(broker) -> None:
     relay_module, broker, _open, clients, world = broker
     listed = broker.answer("abcd1234", "infra", {"op": "list"})["actions"]
     assert sorted(a["name"] for a in listed) == ["digitalocean_droplet-get", "digitalocean_image-list"]
     assert all(a["input_schema"].get("type") == "object" for a in listed)
-    (session,) = clients[0].sessions.values()
-    assert session["tools"] == ["digitalocean_droplet-get", "digitalocean_image-list"]
-    assert session["policy"]["defaultAction"] == "deny" and {r["action"] for r in session["policy"]["rules"]} == {"allow"}
+    (endpoint,) = clients[0].endpoints.values()
+    assert endpoint["tools"] == ["digitalocean_droplet-get", "digitalocean_image-list"]
+    assert endpoint["policy"]["defaultAction"] == "deny" and {r["action"] for r in endpoint["policy"]["rules"]} == {"allow"}
     answer = broker.answer("abcd1234", "infra", {"op": "invoke", "tool": "digitalocean_droplet-get", "arguments": {"ID": 424242}})
     assert json.loads(answer["text"])["droplet"]["id"] == 424242
     for body, status in (({"op": "invoke", "tool": "digitalocean_restore-droplet", "arguments": {"ID": 1, "ImageID": 2}}, 403),
@@ -356,7 +356,7 @@ def test_each_role_gets_an_allow_only_session_with_its_own_actions(broker) -> No
         assert refused.value.status == status
     assert world.restored_at is None and clients[0].calls == [("digitalocean_droplet-get", {"ID": 424242})]
     broker.answer("abcd1234", "changes", {"op": "list"})
-    assert len(clients) == 2  # one session per role
+    assert len(clients) == 2  # one endpoint per role
 
 
 def test_the_broker_keeps_the_reads_to_the_incidents_repository_and_droplet(broker) -> None:
@@ -428,32 +428,32 @@ async def test_the_remediator_requests_and_only_the_relay_approves_and_runs_the_
     (stop,) = out["__interrupt__"]
     assert stop.value["type"] == "action_approval" and stop.value["tool"] == "digitalocean_restore-droplet"
     assert stop.value["arguments"] == {"ID": world.droplet_id, "ImageID": 1} and stop.value["proposal"]
-    (session,) = clients  # the incident's session is the relay's; nothing ran yet
-    assert session.calls == [] and session.decisions == []
+    (endpoint,) = clients  # the incident's endpoint is the relay's; nothing ran yet
+    assert endpoint.calls == [] and endpoint.decisions == []
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://broker.example") as http:
         token = {"authorization": f"Bearer {environ['DO_INCIDENT_BROKER_TOKEN']}"}
         refused = await http.post("/incidents/abcd1234/actions/remediator", headers=token,
                                   json={"op": "decide", "proposal": stop.value["proposal"], "decision": "approve"})
         assert refused.status_code == 400  # the Remediator's token can request, never approve
-    assert session.decisions == []
+    assert endpoint.decisions == []
 
     outcome = await asyncio.to_thread(broker.decide, "abcd1234", stop.value["proposal"], "approve")  # the relay, after a human
-    assert [d for _, d in session.decisions] == ["approve"] and len(session.calls) == 1
+    assert [d for _, d in endpoint.decisions] == ["approve"] and len(endpoint.calls) == 1
     final = await graph.ainvoke(Command(resume="approve"), thread)
-    assert final["answer"] == outcome and len(session.calls) == 1  # the resumed run read the outcome, ran nothing again
+    assert final["answer"] == outcome and len(endpoint.calls) == 1  # the resumed run read the outcome, ran nothing again
     with pytest.raises(LookupError):
         broker.decide("ffff0000", stop.value["proposal"], "approve")  # another incident's proposal
 
     delete = {"id": "call-2", "args": {"tool": "digitalocean_droplet-delete", "arguments": {"ID": world.droplet_id}}}
     refused = await graph.ainvoke({"call": delete}, {"configurable": {"thread_id": "t-d"}})
-    assert "__interrupt__" not in refused and refused["answer"].startswith("Error:") and len(session.calls) == 1
+    assert "__interrupt__" not in refused and refused["answer"].startswith("Error:") and len(endpoint.calls) == 1
 
     again = {"id": "call-3", "args": {**restore["args"], "arguments": {"ID": world.droplet_id, "ImageID": 2}}}
     other = {"configurable": {"thread_id": "t-n"}}
     (stop,) = (await graph.ainvoke({"call": again}, other))["__interrupt__"]
     assert await asyncio.to_thread(broker.decide, "abcd1234", stop.value["proposal"], "deny") == "The user denied this action."
     assert (await graph.ainvoke(Command(resume="deny"), other))["answer"] == "The user denied this action."
-    assert len(session.calls) == 1
+    assert len(endpoint.calls) == 1
 
 
 async def test_a_decision_on_a_proposal_goes_to_the_relays_gateway_before_the_remediator_resumes(relay_world, monkeypatch) -> None:
@@ -777,7 +777,7 @@ async def test_an_approval_waits_in_the_remediators_thread_and_the_decision_resu
 
 
 class _Reads:
-    """A relay's read-only gateway session: one droplet and one snapshot (taken at `created`)."""
+    """A relay's read-only gateway endpoint: one droplet and one snapshot (taken at `created`)."""
 
     def __init__(self, created: str, snapshots: bool = True) -> None:
         self.created, self.snapshots = created, snapshots
@@ -989,49 +989,49 @@ async def test_a_close_refused_while_the_commander_works_keeps_the_tokens(relay_
     await relay.close()
 
 
-def _sessions(*names: str) -> LocalActionGatewayClient:
-    """The gateway's sessions as the relay lists them: the Remediator's of two incidents, and others not the relay's."""
+def _endpoints(*names: str) -> LocalActionGatewayClient:
+    """The gateway's endpoints as the relay lists them: the Remediator's of two incidents, and others not the relay's."""
     client = LocalActionGatewayClient()
     for name in names:
-        client.create_session(name, ["t"], {}, None)
+        client.create_endpoint(name, ["t"], {}, None)
     return client
 
 
 LEFT = ("microvm-ag-abcd1234-remediator-0a0a0a0a", "microvm-ag-abcd1234-remediator-0b0b0b0b",
-        "microvm-ag-ffff0000-remediator-0c0c0c0c", "microvm-ag-1d1d1d1d", "someone-elses-session")
+        "microvm-ag-ffff0000-remediator-0c0c0c0c", "microvm-ag-1d1d1d1d", "someone-elses-endpoint")
 
 
-async def test_closing_deletes_the_incidents_remediator_sessions_after_its_hosts(relay_world) -> None:
+async def test_closing_deletes_the_incidents_remediator_endpoints_after_its_hosts(relay_world) -> None:
     relay_module, relay, host = relay_world
-    relay.sessions = sessions = _sessions(*LEFT)
+    relay.endpoints = endpoints = _endpoints(*LEFT)
     await _started(relay, "abcd1234")
     host.idle()
-    host.on_cleanup = lambda: (len(sessions.sessions) == len(LEFT)) or pytest.fail("swept before the hosts were deleted")
+    host.on_cleanup = lambda: (len(endpoints.endpoints) == len(LEFT)) or pytest.fail("swept before the hosts were deleted")
     deleted = await relay.delete("abcd1234")
     assert deleted[-2:] == ["microvm-ag-abcd1234-remediator-0a0a0a0a", "microvm-ag-abcd1234-remediator-0b0b0b0b"]
     assert relay.hosts.deleted == ["incident-abcd1234"]
-    assert sorted(s["name"] for s in sessions.list_sessions()) == sorted(LEFT[2:])  # other incidents' and others' kept
+    assert sorted(s["name"] for s in endpoints.list_endpoints()) == sorted(LEFT[2:])  # other incidents' and others' kept
     await relay.close()
 
 
 async def test_a_refused_close_sweeps_nothing(relay_world) -> None:
     relay_module, relay, host = relay_world
-    relay.sessions = sessions = _sessions(*LEFT)
+    relay.endpoints = endpoints = _endpoints(*LEFT)
     await _started(relay, "abcd1234")  # its run is still pending
     with pytest.raises(relay_module.NotPending):
         await relay.delete("abcd1234")
-    assert len(sessions.list_sessions()) == len(LEFT)
+    assert len(endpoints.list_endpoints()) == len(LEFT)
     await relay.close()
 
 
 async def test_a_failed_sweep_does_not_undo_the_close(relay_world) -> None:
     relay_module, relay, host = relay_world
-    relay.sessions = sessions = _sessions(*LEFT)
+    relay.endpoints = endpoints = _endpoints(*LEFT)
 
     def broken(*, prefix: str | None = None) -> list:
         raise RuntimeError("gateway down")
 
-    sessions.list_sessions = broken  # type: ignore[method-assign]
+    endpoints.list_endpoints = broken  # type: ignore[method-assign]
     await _started(relay, "abcd1234")
     host.idle()
     assert await relay.delete("abcd1234") == ["incident-abcd1234"]
@@ -1044,14 +1044,14 @@ async def test_a_restarted_relay_sweeps_what_closed_incidents_left(relay_world) 
     await _started(relay, "abcd1234")
     await _started(relay, "ffff0000")
     await relay.close()
-    # A run killed while closing abcd1234: its hosts were deleted, its Remediator's sessions were not.
+    # A run killed while closing abcd1234: its hosts were deleted, its Remediator's endpoints were not.
     relay.hosts.delete(host_id="incident-abcd1234")
     relay.store.retire_host("incident-abcd1234", "deleted")
-    sessions = _sessions(*LEFT)
+    endpoints = _endpoints(*LEFT)
     again = relay_module.Relay(relay.hosts, "secret", relay.service, spec=relay.spec, store=relay.store,
-                               transport=relay.transport, keepalive=3600, watch_seconds=3600, sessions=sessions)
+                               transport=relay.transport, keepalive=3600, watch_seconds=3600, endpoints=endpoints)
     assert await again.adopt() == ["ffff0000"]
-    assert sorted(s["name"] for s in sessions.list_sessions()) == sorted(LEFT[2:])  # ffff0000 is open: its session stays
+    assert sorted(s["name"] for s in endpoints.list_endpoints()) == sorted(LEFT[2:])  # ffff0000 is open: its endpoint stays
     await again.close()
 
 
@@ -1071,7 +1071,7 @@ def test_the_relay_rejects_an_unsigned_alert_and_names_the_policy(relay_world) -
     with pytest.raises(relay_module.SignatureError):
         asyncio.run(relay.handle(b"{}", None))
     policy = relay_module.policy()
-    assert policy["ask"] == ["digitalocean_restore-droplet@3"] and policy["deny"] == ["digitalocean_droplet-delete@3"]
+    assert policy["ask"] == ["digitalocean_restore-droplet"] and policy["deny"] == ["digitalocean_droplet-delete"]
     assert policy["roles"]["changes"] == ["github_list_commits", "github_compare_commits"]
 
 
@@ -1092,7 +1092,7 @@ async def test_the_approvals_api_needs_the_operator_token(relay_world) -> None:
     relay_module, relay, _host = relay_world
     with TestClient(relay_module.make_app(relay, operator_token="op")) as http:
         assert http.get("/incidents").status_code == 401
-        assert http.get("/policy", headers={"Authorization": "Bearer op"}).json()["ask"] == ["digitalocean_restore-droplet@3"]
+        assert http.get("/policy", headers={"Authorization": "Bearer op"}).json()["ask"] == ["digitalocean_restore-droplet"]
         assert http.post("/incidents/abcd1234/actions/infra", json={"op": "list"}).status_code in (404, 405)  # not here
         assert http.get("/incidents/zzzz/log", headers={"Authorization": "Bearer op"}).status_code == 404
 
@@ -1115,7 +1115,7 @@ def test_each_page_is_served_with_a_strict_policy_and_draws_five_specialist_host
         assert http.get("/static/app.css").status_code == 200
         assert http.get("/static/../relay.py").status_code == 404
         assert http.get("/policy").status_code == 401
-        assert http.get("/policy", headers={"Authorization": "Bearer op"}).json()["ask"] == ["digitalocean_restore-droplet@3"]
+        assert http.get("/policy", headers={"Authorization": "Bearer op"}).json()["ask"] == ["digitalocean_restore-droplet"]
     web = _EXAMPLE / "web" / page
     source = (web / "app.js").read_text()
     assert 'const ROLES = ["metrics", "changes", "infra", "remediator", "verifier"];' in source

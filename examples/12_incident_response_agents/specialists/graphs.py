@@ -7,13 +7,13 @@ Every specialist is a deep agent working in its own task directory in its host (
     metrics     the service's /metrics over HTTP, `find_onset` (series.py)
     changes     github_list_commits + github_compare_commits (through the relay's broker), `build_timeline`
     infra       digitalocean_droplet-get + digitalocean_image-list (through the relay's broker)
-    remediator  action_search + action_invoke on its incident's session in the relay (through the broker): the restore asks a
+    remediator  action_search + action_invoke on its incident's endpoint in the relay (through the broker): the restore asks a
                 human at the relay, a delete is refused
     verifier    the service's /health over HTTP, `judge_health` (verdict.py), digitalocean_droplet-get (through the broker)
 
 Real mode: the actions of `changes`, `infra` and `verifier` go through the relay's broker (broker_client.py), which holds the
-gateway token and an allow-only session per role; the host holds only a token for its role in its incident. The Remediator goes
-through the broker in both modes: the relay holds its session, asks the human and runs an approved action itself, so its host
+gateway token and an allow-only endpoint per role; the host holds only a token for its role in its incident. The Remediator goes
+through the broker in both modes: the relay holds its endpoint, asks the human and runs an approved action itself, so its host
 holds no gateway credential. Local mode (DO_INCIDENT_WORLD_URL set): the read-only roles' actions run on the one simulated world
 the relay serves (incident_common/world_server.py), through the package's local gateway with the same allow lists.
 

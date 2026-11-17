@@ -1,19 +1,19 @@
 """Live smoke test: Action Gateway tools for a supervisor, with the approval and connect interrupts.
 
-Opens one standalone Action Gateway session (`microvm-ag-*`) and drives its `action_invoke` tool from
+Creates one Action Gateway endpoint (`microvm-ag-*`) and drives its `action_invoke` tool from
 a one-node LangGraph graph, answering the interrupts at the terminal:
 
-  1. `action_search` lists the session's tools;
+  1. `action_search` lists the endpoint's tools;
   2. an allowed read-only action (`digitalocean_size-list`) runs; if the actor has no OAuth
      connection yet, the connect link is printed, you open it, press Enter, and the call retries;
   3. an `ask` action (`digitalocean_region-list`) interrupts with `action_approval`; you type
      approve or deny, the decision goes to the gateway and an approved call runs once.
 
 Needs DO_ACTION_GATEWAY_TOKEN (scopes `action_gateway:*`) and DO_ACTION_GATEWAY_ACTOR_ID (the actor: by default
-the part of your email before the @) in .env or the environment, and a terminal. The session is deleted in a `finally` block.
+the part of your email before the @) in .env or the environment, and a terminal. The endpoint is deleted in a `finally` block.
 Results go to outputs/live/smoke_action_gateway-<time>.json.
 
-    uv run python scripts/smoke_action_gateway.py [--slug-version 1]
+    uv run python scripts/smoke_action_gateway.py [--slug-version N]
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ def drive(gateway: ActionGateway, tool: str, record: list[dict[str, Any]]) -> st
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--slug-version", default="1", help="version of the two slugs (default: %(default)s)")
+    parser.add_argument("--slug-version", default=None, help="pin the two slugs to this version (default: no pin, the released one)")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="default: %(default)s")
     add_env_file_argument(parser)
     args = parser.parse_args()
@@ -93,7 +93,7 @@ def main() -> int:
     record: list[dict[str, Any]] = []
     started = time.monotonic()
     policy = ActionPolicy(allow=[ALLOWED], ask=[ASKED])
-    slugs = [f"{ALLOWED}@{args.slug_version}", f"{ASKED}@{args.slug_version}"]
+    slugs = [f"{s}@{args.slug_version}" if args.slug_version else s for s in (ALLOWED, ASKED)]
     gateway = ActionGateway(policy, tools=slugs)
     try:
         with gateway:
