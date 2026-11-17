@@ -88,6 +88,20 @@ def test_each_specialist_gets_its_own_model_and_only_its_own_way_to_the_gateway(
     assert agent.role_env(roles.BY_NAME["metrics"], environ)["SUBAGENT_MODEL"] == "another-model"
 
 
+def test_a_specialists_host_gets_the_model_key_or_the_examples_model_never_both(example) -> None:
+    roles = importlib.import_module("roles")
+    agent = importlib.import_module("agent")
+    both = {"DO_MODEL_ACCESS_KEY": "k", "EXAMPLES_MODEL": "x:small", "OPENAI_API_KEY": "o"}
+    env = agent.role_env(roles.BY_NAME["metrics"], both)
+    assert env["DO_MODEL_ACCESS_KEY"] == "k" and "EXAMPLES_MODEL" not in env and "OPENAI_API_KEY" not in env
+    own = {"EXAMPLES_MODEL": "x:small", "EXAMPLES_STRONG_MODEL": "x:big", "OPENAI_API_KEY": "o"}
+    assert "DO_MODEL_ACCESS_KEY" not in agent.role_env(roles.BY_NAME["metrics"], own)
+    assert agent.role_env(roles.BY_NAME["metrics"], own)["EXAMPLES_MODEL"] == "x:small"
+    assert agent.role_env(roles.BY_NAME["changes"], own)["EXAMPLES_MODEL"] == "x:big"  # the Sonnet role
+    assert agent.role_env(roles.BY_NAME["changes"], own)["OPENAI_API_KEY"] == "o"
+    assert agent.role_env(roles.BY_NAME["changes"], {"EXAMPLES_MODEL": "x:small"})["EXAMPLES_MODEL"] == "x:small"
+
+
 def test_a_specialists_host_is_the_specialists_image_and_needs_the_broker(example) -> None:
     roles = importlib.import_module("roles")
     agent = importlib.import_module("agent")

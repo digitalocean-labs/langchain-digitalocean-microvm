@@ -59,9 +59,11 @@ SPECIALISTS = HERE / "specialists"
 OUTPUTS = HERE / "outputs"
 GRAPH = "incident_commander"  # host/langgraph.json
 MAX_TOKENS = 16000
-# What a specialist's host gets, besides its own model: the model key, the service, and in local mode the simulated world.
-SHARED_ENV = ("DO_MODEL_ACCESS_KEY", "EXAMPLES_MODEL", "ANTHROPIC_API_KEY", "DO_INCIDENT_URL", "DO_INCIDENT_DROPLET_ID",
-              "DO_INCIDENT_REPO", "DO_INCIDENT_WORLD_URL")
+# What a specialist's host gets, besides its own model: the service, and in local mode the simulated world.
+SHARED_ENV = ("DO_INCIDENT_URL", "DO_INCIDENT_DROPLET_ID", "DO_INCIDENT_REPO", "DO_INCIDENT_WORLD_URL")
+# The model credentials, by path: with DO_MODEL_ACCESS_KEY the host gets only that key; without it, the model
+# (EXAMPLES_MODEL, or EXAMPLES_STRONG_MODEL for a role that defaults to Sonnet) and the provider's own key.
+PROVIDER_KEYS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "MISTRAL_API_KEY", "GROQ_API_KEY", "COHERE_API_KEY")
 # The relay's broker, for every role that reaches the gateway (the read-only roles and the Remediator). No specialist's host
 # gets a gateway token: the relay holds it and every session.
 BROKER_ENV = ("DO_INCIDENT_BROKER_URL", "DO_INCIDENT_ID")
@@ -74,6 +76,14 @@ def role_env(role: Role, environ: dict[str, str] | None = None) -> dict[str, str
     brokered = role.name in BROKERED
     names = SHARED_ENV + (BROKER_ENV if brokered else ())
     env = {"SUBAGENT_MODEL": role.model_id, **{name: environ[name] for name in names if environ.get(name)}}
+    if environ.get("DO_MODEL_ACCESS_KEY"):
+        env["DO_MODEL_ACCESS_KEY"] = environ["DO_MODEL_ACCESS_KEY"]
+    else:
+        strong = role.model == SONNET and environ.get("EXAMPLES_STRONG_MODEL")
+        model = strong or environ.get("EXAMPLES_MODEL")
+        if model:
+            env["EXAMPLES_MODEL"] = model
+        env.update({name: environ[name] for name in PROVIDER_KEYS if environ.get(name)})
     if brokered and environ.get(broker_token_name(role.name)):
         env["DO_INCIDENT_BROKER_TOKEN"] = environ[broker_token_name(role.name)]
     return env

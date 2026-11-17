@@ -46,7 +46,8 @@ for their orchestrating agents, change with `DO_INFERENCE_STRONG_MODEL` in 07 to
 access key can be scoped to specific models: give yours access to the models you
 run, or the calls fail (there is no fallback to another model). Otherwise `EXAMPLES_MODEL` (default
 `anthropic:claude-haiku-4-5`) goes to LangChain's `init_chat_model`, with that
-provider's own API key.
+provider's own API key, and `EXAMPLES_STRONG_MODEL` (default: `EXAMPLES_MODEL`) is the
+orchestrating agents' model in 07 to 12. Example 02 runs dcode, which takes its model from `-M`, not from these variables.
 
 **MicroVMs.** `DO_MICROVM_TRANSPORT=local` (sandboxes) and
 `DO_MICROVM_HOST_MODE=local` (agent hosts, the default) run everything locally
