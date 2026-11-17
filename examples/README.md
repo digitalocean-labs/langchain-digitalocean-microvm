@@ -41,7 +41,10 @@ cp .env.example .env          # then fill in what you use
 
 **Model.** The examples use DigitalOcean Serverless Inference when
 `DO_MODEL_ACCESS_KEY` is set (`anthropic-claude-haiku-4.5`; change with
-`DO_INFERENCE_MODEL`). Otherwise `EXAMPLES_MODEL` (default
+`DO_INFERENCE_MODEL`; examples 07 to 12 also use `anthropic-claude-4.6-sonnet`
+for their orchestrating agents, change with `DO_INFERENCE_STRONG_MODEL` in 07 to 11). A model
+access key can be scoped to specific models: give yours access to the models you
+run, or the calls fail (there is no fallback to another model). Otherwise `EXAMPLES_MODEL` (default
 `anthropic:claude-haiku-4-5`) goes to LangChain's `init_chat_model`, with that
 provider's own API key.
 
