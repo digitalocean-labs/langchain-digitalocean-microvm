@@ -46,7 +46,15 @@ if str(HERE) not in sys.path:  # roles.py, for an importer from elsewhere (host/
 
 from deepagents import create_deep_agent
 from langchain.tools import tool
-from roles import BROKERED, NAMES, ROLES, SONNET, Role, broker_token_name
+from roles import (
+    BROKERED,
+    NAMES,
+    ROLES,
+    SONNET,
+    Role,
+    broker_token_name,
+    inference_model,
+)
 
 from langchain_digitalocean_microvm.agent_host import (
     GatewaySettings,
@@ -133,7 +141,7 @@ gateway = LazyGateway(
 
 
 def commander_model() -> Any:
-    name = os.environ.get("DO_INCIDENT_MODEL_COMMANDER", SONNET)
+    name = os.environ.get("DO_INCIDENT_MODEL_COMMANDER") or inference_model(SONNET)
     if os.environ.get("DO_MODEL_ACCESS_KEY"):
         from langchain_anthropic import ChatAnthropic
 

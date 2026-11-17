@@ -1207,3 +1207,16 @@ def test_the_fake_demo_handles_the_incident_end_to_end(tmp_path) -> None:
     for expected in ("start_async_task", "approve", "resumed after the decision", "save_postmortem", "deleted:"):
         assert expected in output, (expected, output[-4000:])
     assert "healthy" in output and "refused" in output.lower(), output[-4000:]
+
+
+def test_inference_model_variables_are_the_defaults_and_the_role_variables_win(example, monkeypatch) -> None:
+    roles = importlib.import_module("roles")
+    for name in ("DO_INFERENCE_MODEL", "DO_INFERENCE_STRONG_MODEL", "DO_INCIDENT_MODEL_METRICS", "DO_INCIDENT_MODEL_CHANGES"):
+        monkeypatch.delenv(name, raising=False)
+    assert roles.BY_NAME["metrics"].model_id == roles.HAIKU and roles.BY_NAME["changes"].model_id == roles.SONNET
+    monkeypatch.setenv("DO_INFERENCE_MODEL", "common")
+    monkeypatch.setenv("DO_INFERENCE_STRONG_MODEL", "strong")
+    assert roles.BY_NAME["metrics"].model_id == "common" and roles.BY_NAME["changes"].model_id == "strong"
+    assert roles.inference_model(roles.SONNET) == "strong"
+    monkeypatch.setenv("DO_INCIDENT_MODEL_METRICS", "mine")
+    assert roles.BY_NAME["metrics"].model_id == "mine"

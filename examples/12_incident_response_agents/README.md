@@ -59,6 +59,8 @@ of agents would run in production: each agent's tools, files and credentials sta
 | Recovery Validator | `anthropic-claude-haiku-4.5` | `digitalocean_droplet-get` through the relay's broker, plus the service's `/health` and `verdict.py` | the model key, its broker token |
 
 `DO_INCIDENT_MODEL_<ROLE>` (for example `DO_INCIDENT_MODEL_METRICS`) and `DO_INCIDENT_MODEL_COMMANDER` pick other models.
+Without one, the Sonnet roles (the commander, the Change Analyst) use `DO_INFERENCE_STRONG_MODEL` and the others
+`DO_INFERENCE_MODEL`, when set.
 The action names (`github_*`, `digitalocean_*`) are the Action Gateway catalog's own. GitHub is a trademark of its owner;
 this example is not affiliated with or endorsed by it.
 
