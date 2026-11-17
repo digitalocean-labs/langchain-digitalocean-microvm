@@ -16,6 +16,14 @@ import os
 from dataclasses import dataclass, field
 
 SONNET, HAIKU = "anthropic-claude-4.6-sonnet", "anthropic-claude-haiku-4.5"
+
+
+def inference_model(default: str) -> str:
+    """The Serverless Inference model for a role whose default is `default` (SONNET: the strong slot, else the common one)."""
+    variable = "DO_INFERENCE_STRONG_MODEL" if default == SONNET else "DO_INFERENCE_MODEL"
+    return os.environ.get(variable) or default
+
+
 REMEDIATOR_ASK = ("digitalocean_restore-droplet@3",)
 REMEDIATOR_DENY = ("digitalocean_droplet-delete@3",)
 
@@ -24,13 +32,13 @@ REMEDIATOR_DENY = ("digitalocean_droplet-delete@3",)
 class Role:
     name: str  # the async sub-agent's name and its graph's id in specialists/langgraph.json
     title: str  # what the page and the README call it
-    model: str  # default; DO_INCIDENT_MODEL_<NAME> picks another
+    model: str  # default; DO_INCIDENT_MODEL_<NAME>, then DO_INFERENCE_STRONG_MODEL / DO_INFERENCE_MODEL, pick another
     description: str  # what the commander reads about it
     actions: tuple[str, ...] = field(default=())  # Action Gateway actions through the relay's broker (allow list)
 
     @property
     def model_id(self) -> str:
-        return os.environ.get(f"DO_INCIDENT_MODEL_{self.name.upper()}", self.model)
+        return os.environ.get(f"DO_INCIDENT_MODEL_{self.name.upper()}") or inference_model(self.model)
 
 
 ROLES: tuple[Role, ...] = (
