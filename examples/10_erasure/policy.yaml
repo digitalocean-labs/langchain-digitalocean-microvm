@@ -1,21 +1,22 @@
 # The erasure coordinator's Action Gateway policy (gateway.py loads it with ActionPolicy.from_yaml).
-# Three tiers, written out by hand; anything not listed is denied. Versions are the catalog's released versions.
+# Three tiers, written out by hand; anything not listed is denied.
+# Tool names carry no version: the gateway uses the released one (name@version pins one).
 allow:                                # searches and reads, in every system
-  - hubspot_crm_contacts_search@15
-  - hubspot_crm_contacts_get_by_contactid@14
-  - intercom_search_contacts@9
-  - intercom_get_a_contact@9
-  - stripe_get_customers@13
-  - stripe_get_customers_customer@12
-  - stripe_get_invoices@13
-  - mailchimp_search_members@8
-  - mixpanel_engage_query@19
+  - hubspot_crm_contacts_search
+  - hubspot_crm_contacts_get_by_contactid
+  - intercom_search_contacts
+  - intercom_get_a_contact
+  - stripe_get_customers
+  - stripe_get_customers_customer
+  - stripe_get_invoices
+  - mailchimp_search_members
+  - mixpanel_engage_query
 ask:                                  # one human decision per record: the run ends with an `action_approval` interrupt
-  - hubspot_crm_contacts_gdpr_delete_create@15
-  - intercom_delete_a_contact@9
-  - stripe_post_customers_customer@13   # the billing redaction
-  - mailchimp_forget_contact@8
-  - mixpanel_delete_profile@15
+  - hubspot_crm_contacts_gdpr_delete_create
+  - intercom_delete_a_contact
+  - stripe_post_customers_customer   # the billing redaction
+  - mailchimp_forget_contact
+  - mixpanel_delete_profile
 deny:                                 # refused by the gateway, whoever asks
-  - stripe_delete_customers_customer@13   # its invoices must stay
-  - hubspot_files_gdpr_delete_by_fileid@14
+  - stripe_delete_customers_customer   # its invoices must stay
+  - hubspot_files_gdpr_delete_by_fileid

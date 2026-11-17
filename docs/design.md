@@ -324,8 +324,15 @@ flowchart LR
 ### 5.4 Action Gateway tools (`integrations/action_gateway.py`)
 
 Not a sandbox, and unrelated to the agent-host gateway: a supervisor in the user's process gets
-Action Gateway actions through a standalone session (control plane `POST /v2/action-gateway/sessions`,
-data plane `actions.do-ai.run` with `X-Session-Id`). The module imports nothing else from this package.
+Action Gateway actions through an endpoint of its own (control plane `POST /v2/action-gateway/endpoints`,
+which creates the endpoint with its first version: tools, policy and actor; data plane the origin of the endpoint's
+`mcp_url`, `actions.do-ai.run`, with `X-Endpoint-Id`). The module imports nothing else from this package.
+
+- **The data plane comes from the service.** The client takes the host from the `mcp_url` the create answers with and
+  accepts only `https` on `do-ai.run` / `do-ai-test.run`, so a token is never sent to a host the answer names elsewhere;
+  an endpoint it did not create is looked up (`GET /endpoints/{id}`) once. `DO_ACTION_GATEWAY_DATA_URL` overrides it.
+- **Slugs need no version.** A tool without `@version` gets the catalog's released version, so the examples name tools
+  only and keep working when a toolkit is re-released; a pinned `name@version` is refused when it is no longer released.
 
 - **Interrupts, not a callback.** `requires_approval` and a connect link both stop the tool with a
   LangGraph `interrupt`; the application resumes the graph. The decision is posted with the caller's
@@ -335,7 +342,7 @@ data plane `actions.do-ai.run` with `X-Session-Id`). The module imports nothing 
   goes when the interrupt returns. Across a process restart the second run asks again and the first
   approval expires.
 - **Search goes through the data plane.** `GET /tools` lists only the gateway's own meta tools;
-  `POST /tools/search` (`{"queries": [{"use_case": ...}]}`) returns the session's matching actions
+  `POST /tools/search` (`{"queries": [{"use_case": ...}]}`) returns the endpoint's matching actions
   with their descriptions and input schemas, which also give preloaded tools their schema.
 - **Policy as a file** (`ActionPolicy.from_yaml` / `from_mapping`). The three lists of `ActionPolicy` are the schema, so
   nothing is translated and the file reads like the dataclass. What it adds over the Python form:
@@ -343,11 +350,11 @@ data plane `actions.do-ai.run` with `X-Session-Id`). The module imports nothing 
   - one copy can serve the code, the README's tier table and every process that builds the same policy, instead of drifting
     apart;
   - a run can point at another file (development, production) without a code change;
-  - mistakes are refused when the file is loaded: a tool in two tiers (the session policy would get two rules for it), a
+  - mistakes are refused when the file is loaded: a tool in two tiers (the endpoint's policy would get two rules for it), a
     `do.actions/` prefix or a `default` key (the shape of a session spec, where the default is not always deny), the
     always-allowed meta tools, a list given as a bare string.
   The loader takes a path or a stream and never YAML text, so a mistyped path is an error and not a parse of the path;
-  it reads with `yaml.safe_load`. Versions stay in the entries, so the same lists give `tools=`. The file is read when the
+  it reads with `yaml.safe_load`. A pinned version stays in its entry, so the same lists give `tools=`. The file is read when the
   policy is built, so keep it where the agent's tools cannot write. The constructor stays unchanged: it does not run the
   loader's checks.
 - **Local mode.** `LocalActionGatewayClient` keeps the gateway's rules in memory: policy, one-shot
@@ -427,7 +434,7 @@ Run: `uv run pytest` (unit), `uv run pytest -m e2e` (local e2e: real `langgraph 
 | `microvm-per-task-sandbox` | A per-task subagent sandbox (`PerTask`), next to `microvm-subagent-sandbox`; id `<thread>-<subagent>-<key>` |
 | `microvm-agenthost`, `microvm-agenthost-id:<host id>`, `microvm-agenthost-graph:<graph>` | An agent host; name `microvm-agenthost-<host id>` |
 | `microvm-golden` | A warm-start golden build; checkpoint names `microvm-golden-…` |
-| `microvm-ag-<id>` | An Action Gateway session (`integrations/action_gateway.py`); not a MicroVM, never listed by the clean-up scripts |
+| `microvm-ag-<id>` | An Action Gateway endpoint (`integrations/action_gateway.py`); not a MicroVM, never listed by the clean-up scripts |
 | `microvm-probe` | `scripts/probe_api.py`; names `probe-…` |
 | `microvm-namespace:<ns>` | The namespace (`DO_MICROVM_NAMESPACE`) of a MicroVM; its name prefix gets `-ns-<ns>` (`microvm-sandbox-ns-<ns>-<id>`, `microvm-agenthost-ns-<ns>-<id>`, `microvm-golden-ns-<ns>-…`) and its store is `gateway-<ns>.sqlite`. No tag: the default namespace, with the names above. Sandbox templates (`microvm-template-…`) carry no namespace: they are content-addressed and shared |
 

@@ -60,16 +60,16 @@ def check(label: str, ok: bool | None, detail: str = "") -> bool:
     return ok is not False
 
 
-def session_opens(tools: Sequence[str]) -> tuple[bool, str]:
-    """Open (and close) a session with the commander's policy and tools: a version the catalog no longer releases is
-    refused here, before a run, with the version it does release."""
+def endpoint_opens(tools: Sequence[str]) -> tuple[bool, str]:
+    """Create (and delete) an endpoint with the commander's policy and tools: a tool the catalog does not offer, or a pinned
+    version it no longer releases, is refused here, before a run."""
     try:
         with ActionGateway(POLICY, tools=list(tools)):
             pass
     except ActionGatewayError as exc:
-        hint = "; update the version in policy.yaml (incident_common/setup_droplet.py lists its own)" if "released version" in str(exc) else ""
+        hint = "; drop or update the version in policy.yaml (incident_common/setup_droplet.py lists its own tools)" if "released version" in str(exc) else ""
         return False, f"{str(exc)[:240]}{hint}"
-    return True, f"opened and closed; {len(tools)} tools at their released versions"
+    return True, f"created and deleted; {len(tools)} tools"
 
 
 def main() -> None:
@@ -140,9 +140,9 @@ def main() -> None:
     print("\nAction Gateway" + (" (local)" if local else ""))
     tiers = f"ask: {', '.join(n.split('@')[0] for n in POLICY.ask)}; deny: {', '.join(n.split('@')[0] for n in POLICY.deny)}"
     if local:
-        check("session", True, f"opens on first use; {tiers}")
+        check("gateway endpoint", True, f"created on first use; {tiers}")
     else:
-        ready &= check("session", *session_opens(gateway.tool_slugs))
+        ready &= check("gateway endpoint", *endpoint_opens(gateway.tool_slugs))
         print(f"   {tiers}")
     print(f"\nTeam: {', '.join(ROLES)}, and the remediator (no MicroVM)")
     print("\n\033[1m" + ("READY" if ready else "NOT READY") + RESET)

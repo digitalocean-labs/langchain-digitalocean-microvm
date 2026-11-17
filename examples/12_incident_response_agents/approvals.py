@@ -1,7 +1,7 @@
 """The approval prompt, used by the console (console.py, through relay.py) and the relay.
 
 An `action_approval` interrupt carries the tool, its arguments and the Remediator's evidence. Beside them the console prints
-what the arguments point at, read with its own gateway session, so an approval does not rest on the agents' words alone.
+what the arguments point at, read with its own gateway endpoint, so an approval does not rest on the agents' words alone.
 """
 
 from __future__ import annotations

@@ -9,7 +9,8 @@ Reads `.env` (variables set in the shell win), prints no secret, creates nothing
   `EXAMPLES_MODEL` plus the provider key it names. `--deep` also sends a one-token request per model the
   selected examples use (`DO_INFERENCE_MODEL`, and `DO_INFERENCE_STRONG_MODEL` for examples 07-12), since a key
   can be scoped to specific models;
-- the Action Gateway token (a one-item tool-catalog read);
+- the Action Gateway token (a one-item tool-catalog read); `--deep` also creates one `microvm-ag-check-*` endpoint, calls the
+  read-only `digitalocean_region-list` through it (an answer or a connect link both show the policy is enforced) and deletes it;
 - the variables each example reads, and whether the team has room for it.
 
 The access token, the image and the scopes that create, pause and delete cannot be checked without a
@@ -48,6 +49,7 @@ INFERENCE_URL = "https://inference.do-ai.run/v1/models"
 INFERENCE_CHAT_URL = "https://inference.do-ai.run/v1/chat/completions"
 STRONG_MODEL_EXAMPLES = {"07", "08", "09", "10", "11", "12"}  # the examples with an orchestrating (strong) model
 ACTION_GATEWAY_URL = "https://api.digitalocean.com/v2/action-gateway/tools"
+GATEWAY_CHECK_TOOL = "digitalocean_region-list"  # read-only; no version: the released one
 
 # Where a provider's key lives, for EXAMPLES_MODEL ("anthropic:claude-haiku-4-5" -> ANTHROPIC_API_KEY).
 PROVIDER_KEYS = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "google_genai": "GOOGLE_API_KEY"}
@@ -111,6 +113,7 @@ class Probes:
     gateway: Callable[[], str | None]
     deep: Callable[[], str | None] | None = None
     model_access: Callable[[str], str | None] | None = None  # a one-token request for a model id; None when it works
+    gateway_call: Callable[[], str | None] | None = None  # one read-only call through a throwaway endpoint
 
 
 @dataclass
@@ -229,6 +232,9 @@ def evaluate(env: Mapping[str, str], probes: Probes | None, *, local: bool, only
     elif probes is not None:
         problem = probes.gateway()
         add(Line(problem is None, "Action Gateway token", problem or "accepted"))
+        if problem is None and probes.gateway_call is not None:
+            refused = probes.gateway_call()
+            add(Line(refused is None, "Action Gateway call", refused or "a read-only action ran through a throwaway endpoint"))
     else:
         add(Line(None, "Action Gateway token", "set (not checked: offline)"))
 
@@ -311,6 +317,26 @@ def _model_probe(key: str, model: str) -> str | None:
     return f"unexpected answer {response.status_code}"
 
 
+def _gateway_call(env: Mapping[str, str]) -> str | None:
+    """Create a throwaway endpoint allowing one read-only action, call it, delete it: None when the call was served."""
+    from langchain_digitalocean_microvm.integrations.action_gateway import (
+        ActionGateway,
+        ActionGatewayError,
+        ActionPolicy,
+    )
+
+    try:
+        with ActionGateway(ActionPolicy(allow=[GATEWAY_CHECK_TOOL]), token=env.get("DO_ACTION_GATEWAY_TOKEN"),
+                           actor_id=env.get("DO_ACTION_GATEWAY_ACTOR_ID"), endpoint_prefix="microvm-ag-check-",
+                           data_url=env.get("DO_ACTION_GATEWAY_DATA_URL") or None) as gateway:
+            answer = gateway.request(GATEWAY_CHECK_TOOL, {}, "setup check (read-only)")
+    except ActionGatewayError as exc:
+        return str(exc)[:300]
+    if not isinstance(answer, str) or answer.startswith("Error:"):
+        return str(answer)[:300]
+    return None
+
+
 def live_probes(env: Mapping[str, str], *, deep: bool) -> tuple[Probes, MicroVMClient | None]:
     token = env.get("DO_MICROVM_API_TOKEN")
     client = MicroVMClient(token) if token else None
@@ -355,6 +381,7 @@ def live_probes(env: Mapping[str, str], *, deep: bool) -> tuple[Probes, MicroVMC
         gateway=lambda: _http_probe(ACTION_GATEWAY_URL, env.get("DO_ACTION_GATEWAY_TOKEN", ""), params={"per_page": "1"}),
         deep=deep_check if deep and client else None,
         model_access=(lambda model: _model_probe(env.get("DO_MODEL_ACCESS_KEY", ""), model)) if deep else None,
+        gateway_call=(lambda: _gateway_call(env)) if deep else None,
     ), client
 
 

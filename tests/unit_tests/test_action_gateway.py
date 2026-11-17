@@ -13,7 +13,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
 from langchain_digitalocean_microvm.integrations.action_gateway import (
-    SESSION_PREFIX,
+    ENDPOINT_PREFIX,
     ActionGateway,
     ActionGatewayClient,
     ActionGatewayError,
@@ -75,50 +75,15 @@ def test_policy_spec_always_allows_the_meta_tools_and_drops_versions():
     ]
 
 
-def test_session_is_named_with_the_prefix_and_deleted_on_close(fake: LocalActionGatewayClient):
+def test_endpoint_is_named_with_the_prefix_and_deleted_on_close(fake: LocalActionGatewayClient):
     with ActionGateway(POLICY, client=fake, actor_id="user-1") as gw:
         gw.tools()
-        (session,) = fake.sessions.values()
-        assert session["name"].startswith(SESSION_PREFIX)
-        assert session["actor_id"] == "user-1"
-        assert session["tools"] == ["exa_web_search", "digitalocean_droplet-create"]  # default: allow + ask
-    assert fake.sessions == {}
+        (endpoint,) = fake.endpoints.values()
+        assert endpoint["name"].startswith(ENDPOINT_PREFIX)
+        assert endpoint["actor_id"] == "user-1"
+        assert endpoint["tools"] == ["exa_web_search", "digitalocean_droplet-create"]  # default: allow + ask
+    assert fake.endpoints == {}
     assert fake.closed
-
-
-def test_a_session_prefix_names_the_session_and_lists_it(fake: LocalActionGatewayClient):
-    other = ActionGateway(POLICY, client=fake).open()
-    with ActionGateway(POLICY, client=fake, session_prefix="microvm-ag-inc1-remediator-") as gw:
-        gw.open()
-        (mine,) = fake.list_sessions(prefix="microvm-ag-inc1-")
-        assert re.fullmatch(r"microvm-ag-inc1-remediator-[0-9a-f]{8}", mine["name"])
-        assert mine["sessionUrn"].rsplit(":", 1)[-1] == gw.session_id
-        assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", mine["createdAt"])
-        assert len(fake.list_sessions()) == 2
-    assert fake.list_sessions(prefix="microvm-ag-inc1-") == []
-    other.close()
-    with pytest.raises(ValueError, match="session_prefix"):
-        ActionGateway(POLICY, client=fake, session_prefix="")
-
-
-def test_client_lists_every_page_and_filters_by_prefix():
-    names = [f"microvm-ag-{i:03d}" for i in range(150)] + ["other-1"]
-    pages: list[dict[str, str]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        params = dict(request.url.params)
-        pages.append(params)
-        page, per = int(params["page"]), int(params["per_page"])
-        chunk = names[(page - 1) * per: page * per]
-        return httpx.Response(200, json={"sessions": [{"sessionUrn": f"urn:{n}", "name": n} for n in chunk],
-                                         "pagination": {"page": page, "per_page": per, "total": len(names)}})
-
-    client = ActionGatewayClient("tok")
-    client._api = httpx.Client(base_url="https://api.digitalocean.com/v2/action-gateway", transport=httpx.MockTransport(handler))
-    assert len(client.list_sessions()) == 151
-    assert [p["page"] for p in pages] == ["1", "2"] and pages[0]["per_page"] == "100"
-    found = client.list_sessions(prefix="microvm-ag-14")
-    assert [s["name"] for s in found] == [f"microvm-ag-14{i}" for i in range(10)]
 
 
 def test_no_tools_or_unknown_preload_is_refused(fake: LocalActionGatewayClient):
@@ -152,7 +117,7 @@ def test_meta_tools_search_and_invoke_an_allowed_action(gateway: ActionGateway, 
 
 def test_denied_and_unknown_actions_come_back_as_errors(gateway: ActionGateway):
     invoke = gateway.tools()[1]
-    assert "denied by the session policy" in invoke.invoke({"tool": "digitalocean_region-list"})
+    assert "denied by the endpoint's policy" in invoke.invoke({"tool": "digitalocean_region-list"})
     assert "unknown tool" in invoke.invoke({"tool": "nope"})
 
 
@@ -245,13 +210,13 @@ def test_decide_deny_or_an_expired_approval_runs_nothing(gateway: ActionGateway,
 def test_request_answers_allowed_denied_and_unconnected_actions_as_text(gateway: ActionGateway, fake: LocalActionGatewayClient):
     assert json.loads(gateway.request("exa_web_search", {"query": "q"})) == {"results": ["result for q"]}
     assert gateway.request("digitalocean_region-list").startswith("Error:")  # denied by the policy
-    fake.sessions[next(iter(fake.sessions))]["policy"] = ActionPolicy(allow=["digitalocean_region-list"]).to_spec()
+    fake.endpoints[next(iter(fake.endpoints))]["policy"] = ActionPolicy(allow=["digitalocean_region-list"]).to_spec()
     assert CONNECT_URL in gateway.request("digitalocean_region-list")
 
 
 def test_connect_link_interrupts_and_resume_retries(gateway: ActionGateway, fake: LocalActionGatewayClient):
     gateway.policy = ActionPolicy(allow=["digitalocean_region-list"])  # only for the fake's rules below
-    fake.sessions[next(iter(fake.sessions))]["policy"] = gateway.policy.to_spec()
+    fake.endpoints[next(iter(fake.endpoints))]["policy"] = gateway.policy.to_spec()
     graph = make(gateway, {"tool": "digitalocean_region-list"})
     out = graph.invoke({}, thread())
     (stop,) = out["__interrupt__"]
@@ -262,7 +227,7 @@ def test_connect_link_interrupts_and_resume_retries(gateway: ActionGateway, fake
 
 
 def test_connect_cancel_and_a_link_still_unopened(gateway: ActionGateway, fake: LocalActionGatewayClient):
-    fake.sessions[next(iter(fake.sessions))]["policy"] = ActionPolicy(allow=["digitalocean_region-list"]).to_spec()
+    fake.endpoints[next(iter(fake.endpoints))]["policy"] = ActionPolicy(allow=["digitalocean_region-list"]).to_spec()
     call = {"tool": "digitalocean_region-list"}
     cancelled = make(gateway, call)
     cancelled.invoke({}, thread("c"))
@@ -272,14 +237,30 @@ def test_connect_cancel_and_a_link_still_unopened(gateway: ActionGateway, fake: 
     assert "Still not connected" in unopened.invoke(Command(resume="done"), thread("d"))["answer"]
 
 
-def test_client_speaks_the_data_plane_protocol():
+API = "https://api.digitalocean.com/v2/action-gateway"
+MCP_URL = "https://actions.do-ai-test.run/mcp/endpoint/abc"
+
+
+def _client(handler, *, data_url: str | None = None) -> ActionGatewayClient:
+    client = ActionGatewayClient("tok", data_url=data_url)
+    client._api = httpx.Client(base_url=API, transport=httpx.MockTransport(handler), headers={"Authorization": "Bearer tok"})
+    real = httpx.Client
+
+    def plane(*, base_url: str, headers: dict[str, str], timeout: float) -> httpx.Client:  # data-plane clients, by origin
+        return real(base_url=base_url, headers=headers, timeout=timeout, transport=httpx.MockTransport(handler))
+
+    client._new_plane = plane  # type: ignore[attr-defined]
+    return client
+
+
+def test_client_speaks_the_endpoint_protocol_on_the_data_plane_its_mcp_url_names(monkeypatch):
     seen: list[httpx.Request] = []
     hit = {"name": "t", "description": "d", "inputSchema": {"type": "object"}}
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        if request.url.path == "/v2/action-gateway/sessions":
-            return httpx.Response(200, json={"session": {"sessionUrn": "do:ag:session:abc"}})
+        if request.url.path == "/v2/action-gateway/endpoints":
+            return httpx.Response(201, json={"endpoint": {"id": "abc", "mcp_url": MCP_URL}, "mcp_url": MCP_URL})
         if request.url.path == "/tools/invoke":
             return httpx.Response(200, json={"results": [{"result": {"status": "success", "output": {"ok": 1}}}]})
         if request.url.path == "/tools/search":
@@ -288,21 +269,60 @@ def test_client_speaks_the_data_plane_protocol():
             return httpx.Response(410, text="gone")
         return httpx.Response(200, json={})
 
-    client = ActionGatewayClient("tok")
-    client._api = httpx.Client(base_url="https://api.digitalocean.com/v2/action-gateway", transport=httpx.MockTransport(handler), headers={"Authorization": "Bearer tok"})
-    client._data = httpx.Client(base_url="https://actions.do-ai.run", transport=httpx.MockTransport(handler), headers={"Authorization": "Bearer tok"})
-    urn = client.create_session("microvm-ag-1", ["t@1"], ActionPolicy(allow=["t"]).to_spec(), "u")
-    assert urn == "do:ag:session:abc"
-    assert json.loads(seen[0].content)["actorId"] == "u"
+    monkeypatch.delenv("DO_ACTION_GATEWAY_DATA_URL", raising=False)
+    client = _client(handler)
+    endpoint_id = client.create_endpoint("microvm-ag-1", ["t@1"], ActionPolicy(allow=["t"]).to_spec(), "u")
+    assert endpoint_id == "abc"
+    assert json.loads(seen[0].content) == {"name": "microvm-ag-1", "version": {"tools": ["t@1"], "actor_id": "u",
+                                           "policy": ActionPolicy(allow=["t"]).to_spec()}}
     assert client.invoke("abc", "t", {"a": 1}, "why") == {"status": "success", "output": {"ok": 1}}
-    assert seen[1].headers["X-Session-Id"] == "abc" and seen[1].headers["Authorization"] == "Bearer tok"
+    assert seen[1].url.host == "actions.do-ai-test.run"  # the origin of the returned mcp_url
+    assert seen[1].headers["X-Endpoint-Id"] == "abc" and seen[1].headers["Authorization"] == "Bearer tok"
+    assert "X-Session-Id" not in seen[1].headers
     assert json.loads(seen[1].content) == {"rationale": "why", "tools": [{"tool": "t", "arguments": {"a": 1}}]}
     assert client.search("abc", "do t", 3) == [hit]
     assert json.loads(seen[2].content) == {"queries": [{"use_case": "do t"}], "limit": 3}
     with pytest.raises(ActionGatewayError) as err:
         client.decide("abc", None, "id1", "approve")
     assert err.value.status_code == 410
-    assert seen[3].url.path == "/approvals/session/abc/id1"
+    assert seen[3].url.path == "/approvals/id1" and seen[3].headers["X-Endpoint-Id"] == "abc"
+    client.delete_endpoint("abc")
+    assert (seen[-1].method, seen[-1].url.path) == ("DELETE", "/v2/action-gateway/endpoints/abc")
+
+
+def test_an_endpoint_it_did_not_create_is_looked_up_and_data_url_overrides(monkeypatch):
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/v2/action-gateway/endpoints/xyz":
+            return httpx.Response(200, json={"endpoint": {"id": "xyz", "mcp_url": "https://nyc3.actions.do-ai.run/mcp/endpoint/xyz"}})
+        return httpx.Response(200, json={"results": [{"result": {"status": "success", "output": "ok"}}]})
+
+    monkeypatch.delenv("DO_ACTION_GATEWAY_DATA_URL", raising=False)
+    _client(handler).invoke("xyz", "t", {}, "why")
+    assert [r.url.host for r in seen] == ["api.digitalocean.com", "nyc3.actions.do-ai.run"]
+    seen.clear()
+    monkeypatch.setenv("DO_ACTION_GATEWAY_DATA_URL", "https://actions.do-ai.run")
+    _client(handler).invoke("xyz", "t", {}, "why")
+    assert [r.url.host for r in seen] == ["actions.do-ai.run"]  # no lookup
+
+
+@pytest.mark.parametrize("url", ["http://actions.do-ai.run/mcp/endpoint/abc", "https://actions.example.com/mcp/endpoint/abc",
+                                 "https://do-ai.run.example.com/mcp"])
+def test_an_mcp_url_off_the_gateway_domains_is_refused_and_the_endpoint_deleted(monkeypatch, url: str):
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.method == "POST":
+            return httpx.Response(201, json={"endpoint": {"id": "abc"}, "mcp_url": url})
+        return httpx.Response(204)
+
+    monkeypatch.delenv("DO_ACTION_GATEWAY_DATA_URL", raising=False)
+    with pytest.raises(ActionGatewayError, match="outside"):
+        _client(handler).create_endpoint("microvm-ag-1", ["t@1"], {}, None)
+    assert (seen[-1].method, seen[-1].url.path) == ("DELETE", "/v2/action-gateway/endpoints/abc")
 
 
 def test_ask_on_an_unconnected_action_approves_then_connects_then_runs(fake: LocalActionGatewayClient):
@@ -319,3 +339,38 @@ def test_ask_on_an_unconnected_action_approves_then_connects_then_runs(fake: Loc
         final = graph.invoke(Command(resume="connected"), thread())
         assert json.loads(final["answer"]) == {"regions": ["nyc3", "sfo3", "ams3"]}
         assert [d for _, d in fake.decisions] == ["approve", "approve"]
+
+
+def test_an_endpoint_prefix_names_the_endpoint_and_lists_it(fake: LocalActionGatewayClient):
+    other = ActionGateway(POLICY, client=fake).open()
+    with ActionGateway(POLICY, client=fake, endpoint_prefix="microvm-ag-inc1-remediator-") as gw:
+        gw.open()
+        (mine,) = fake.list_endpoints(prefix="microvm-ag-inc1-")
+        assert re.fullmatch(r"microvm-ag-inc1-remediator-[0-9a-f]{8}", mine["name"])
+        assert mine["id"] == gw.endpoint_id
+        assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", mine["created_at"])
+        assert len(fake.list_endpoints()) == 2
+    assert fake.list_endpoints(prefix="microvm-ag-inc1-") == []
+    other.close()
+    with pytest.raises(ValueError, match="endpoint_prefix"):
+        ActionGateway(POLICY, client=fake, endpoint_prefix="")
+
+
+def test_client_lists_every_page_and_filters_by_prefix():
+    names = [f"microvm-ag-{i:03d}" for i in range(150)] + ["other-1"]
+    pages: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        pages.append(params)
+        start, per = int(params.get("page_token") or 0), int(params["page_size"])
+        chunk = names[start: start + per]
+        following = str(start + per) if start + per < len(names) else ""
+        return httpx.Response(200, json={"endpoints": [{"id": f"id-{n}", "name": n} for n in chunk], "next_page_token": following})
+
+    client = ActionGatewayClient("tok")
+    client._api = httpx.Client(base_url=API, transport=httpx.MockTransport(handler))
+    assert len(client.list_endpoints()) == 151
+    assert [p.get("page_token") for p in pages] == [None, "100"] and pages[0]["page_size"] == "100"
+    found = client.list_endpoints(prefix="microvm-ag-14")
+    assert [e["name"] for e in found] == [f"microvm-ag-14{i}" for i in range(10)]

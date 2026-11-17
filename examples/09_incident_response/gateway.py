@@ -1,4 +1,4 @@
-"""The Action Gateway session of the incident commander: which actions it may call, and the audit of every call.
+"""The Action Gateway endpoint of the incident commander: which actions it may call, and the audit of every call.
 
 One policy, three tiers (local mode and real mode alike):
 
@@ -30,7 +30,7 @@ from langchain_digitalocean_microvm.integrations.action_gateway_local import (
     LocalActionGatewayClient,
 )
 
-# policy.yaml holds the three tiers, versions included, so the same lists name the session's tools.
+# policy.yaml holds the three tiers; the same lists name the endpoint's tools.
 POLICY = ActionPolicy.from_yaml(Path(__file__).resolve().parent / "policy.yaml")
 READS, ASKED, DENIED = list(POLICY.allow), list(POLICY.ask), list(POLICY.deny)
 
@@ -47,20 +47,20 @@ class AuditedClient:
         self._approval_tool: dict[str, str] = {}
         self._approved: set[str] = set()
 
-    def create_session(self, name: str, tools: Sequence[str], policy: Mapping[str, Any], actor_id: str | None) -> str:
-        return self.inner.create_session(name, tools, policy, actor_id)
+    def create_endpoint(self, name: str, tools: Sequence[str], policy: Mapping[str, Any], actor_id: str | None) -> str:
+        return self.inner.create_endpoint(name, tools, policy, actor_id)
 
-    def delete_session(self, urn: str) -> None:
-        self.inner.delete_session(urn)
+    def delete_endpoint(self, endpoint_id: str) -> None:
+        self.inner.delete_endpoint(endpoint_id)
 
-    def search(self, session_id: str, query: str, limit: int) -> list[dict[str, Any]]:
-        return self.inner.search(session_id, query, limit)
+    def search(self, endpoint_id: str, query: str, limit: int) -> list[dict[str, Any]]:
+        return self.inner.search(endpoint_id, query, limit)
 
     def close(self) -> None:
         self.inner.close()
 
-    def invoke(self, session_id: str, tool: str, arguments: Mapping[str, Any], rationale: str) -> dict[str, Any]:
-        result = self.inner.invoke(session_id, tool, arguments, rationale)
+    def invoke(self, endpoint_id: str, tool: str, arguments: Mapping[str, Any], rationale: str) -> dict[str, Any]:
+        result = self.inner.invoke(endpoint_id, tool, arguments, rationale)
         meta = result.get("_meta") or {}
         message = str((result.get("error") or {}).get("message", "") if isinstance(result.get("error"), Mapping) else result.get("error", ""))
         if "requires_approval" in (result.get("status"), meta.get("status")):
@@ -81,8 +81,8 @@ class AuditedClient:
                   error=message[:300] if status in ("error", "deny", "denied") else "")
         return result
 
-    def decide(self, session_id: str, path: str | None, approval_id: str, decision: str) -> None:
-        self.inner.decide(session_id, path, approval_id, decision)
+    def decide(self, endpoint_id: str, path: str | None, approval_id: str, decision: str) -> None:
+        self.inner.decide(endpoint_id, path, approval_id, decision)
         tool = self._approval_tool.get(approval_id, "?")
         if decision == "approve":
             self._approved.add(tool)
@@ -90,7 +90,7 @@ class AuditedClient:
 
 
 def make_gateway(world: Any, *, local: bool) -> ActionGateway:
-    """The incident commander's gateway session (opened on first use, deleted when the process ends)."""
+    """The incident commander's gateway endpoint (created on first use, deleted when the process ends)."""
     if local:
         client: GatewayClient = LocalActionGatewayClient(actions=world.actions())
     else:

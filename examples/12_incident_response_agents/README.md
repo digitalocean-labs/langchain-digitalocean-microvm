@@ -55,7 +55,7 @@ of agents would run in production: each agent's tools, files and credentials sta
 | Metrics Analyst | `anthropic-claude-haiku-4.5` | none: reads the service's `/metrics`, `series.py` in its host | the model key |
 | Change Analyst | `anthropic-claude-4.6-sonnet` | `github_list_commits`, `github_compare_commits`, through the relay's broker | the model key, its broker token |
 | Infra Analyst | `anthropic-claude-haiku-4.5` | `digitalocean_droplet-get`, `digitalocean_image-list`, through the relay's broker | the model key, its broker token |
-| Remediator | `anthropic-claude-haiku-4.5` | `action_search` and `action_invoke` on its incident's session in the relay: `digitalocean_restore-droplet` **ask**, `digitalocean_droplet-delete` **deny** | the model key, its broker token |
+| Remediator | `anthropic-claude-haiku-4.5` | `action_search` and `action_invoke` on its incident's endpoint in the relay: `digitalocean_restore-droplet` **ask**, `digitalocean_droplet-delete` **deny** | the model key, its broker token |
 | Recovery Validator | `anthropic-claude-haiku-4.5` | `digitalocean_droplet-get` through the relay's broker, plus the service's `/health` and `verdict.py` | the model key, its broker token |
 
 `DO_INCIDENT_MODEL_<ROLE>` (for example `DO_INCIDENT_MODEL_METRICS`) and `DO_INCIDENT_MODEL_COMMANDER` pick other models.
@@ -67,8 +67,8 @@ this example is not affiliated with or endorsed by it.
 | | What it shows |
 | --- | --- |
 | **Sub-agents as whole agents in MicroVMs** | Each specialist is a deep agent served by an Agent Server in a MicroVM of its own (`specialists/`), created per task by the commander's embedded `SubAgentGateway` (the package's `agent_host`) with that role's `HostSpec`: the specialists' image and the role's environment |
-| **Least privilege per agent** | Every specialist reaches its actions through the relay's broker, which holds the gateway token and every gateway session: one per read-only role that allows that role's actions and nothing else, and one per incident for the Remediator. A specialist's MicroVM holds only a token for its own role in its own incident; an action it does not hold is not offered to it, and the broker refuses it |
-| **The agent proposes, the relay acts** | The Remediator's request for the restore runs nothing: its run ends with an `action_approval` interrupt in **its** thread. The relay shows it with the droplet and the snapshot it read itself, posts the human's decision to the gateway with its own token and, once approved, runs the restore itself; then it resumes the Remediator's thread, which reports the outcome. No credential in any MicroVM can approve an action or open a gateway session, and the commander is not involved |
+| **Least privilege per agent** | Every specialist reaches its actions through the relay's broker, which holds the gateway token and every gateway endpoint: one per read-only role that allows that role's actions and nothing else, and one per incident for the Remediator. A specialist's MicroVM holds only a token for its own role in its own incident; an action it does not hold is not offered to it, and the broker refuses it |
+| **The agent proposes, the relay acts** | The Remediator's request for the restore runs nothing: its run ends with an `action_approval` interrupt in **its** thread. The relay shows it with the droplet and the snapshot it read itself, posts the human's decision to the gateway with its own token and, once approved, runs the restore itself; then it resumes the Remediator's thread, which reports the outcome. No credential in any MicroVM can approve an action or create a gateway endpoint, and the commander is not involved |
 | **A model per task** | Sonnet where the reading is hard (the commander, the diff), Haiku for the rest |
 | **The commander is woken** | A sub-agent on another server cannot wake its parent. The relay reads the tasks while an incident has work open and starts a short turn on the commander's thread when specialists finished |
 
@@ -79,7 +79,7 @@ this example is not affiliated with or endorsed by it.
    host for each; they work in parallel. When they are done, the relay starts a turn on the commander's thread ("Update from
    your sub-agents..."); the commander reads them with `check_async_task` and names the cause.
 3. **Restore.** It starts the `remediator` with the action and its arguments. The Remediator's `action_invoke` asks the
-   broker; the incident's gateway session (the relay's) answers `requires_approval`, and nothing runs. Its run ends, waiting
+   broker; the incident's gateway endpoint (the relay's) answers `requires_approval`, and nothing runs. Its run ends, waiting
    for a human. The task is `waiting`; the approval appears in the console (or on the
    [approvals page](#the-approvals-page)). On the decision the relay posts it to the gateway and, if approved, runs the
    restore itself; then it resumes the Remediator's thread through the commander's gateway, and the Remediator reports what
@@ -90,13 +90,13 @@ this example is not affiliated with or endorsed by it.
    shows whether that reading agrees, and flags it when it does not.
 5. **Postmortem.** The commander saves its narrative (summary, root cause, what was done, follow-ups; no timeline: it has no
    clock). The relay adds the timeline and both readings of the service from what it recorded. A follow-up asking to delete the
-   droplet goes to the Remediator, and its session's policy refuses it. When the incident closes, the relay writes the postmortem
+   droplet goes to the Remediator, and its endpoint's policy refuses it. When the incident closes, the relay writes the postmortem
    to `outputs/postmortems/<incident>.md` (`DO_INCIDENT_POSTMORTEMS` picks another directory) before any host is deleted: a
    close that cannot write it deletes nothing.
 
 ## Who holds what
 
-- The **relay** holds the Action Gateway token (every session: the read-only roles', the Remediator's, and a read-only session
+- The **relay** holds the Action Gateway token (every endpoint: the read-only roles', the Remediator's, and a read-only endpoint
   of its own for the approver's facts), the hosts' tokens, the operator token, the signing secret and the broker key. None of
   them reaches a host, except as noted below.
 - The **commander's host** holds the MicroVMs tokens (its gateway creates, pauses and deletes the specialists' MicroVMs, and the
@@ -125,13 +125,13 @@ specialists' MicroVMs need to reach, so it is the only one to expose. `POST /inc
   restarted relay accepts the same tokens. The key is not derived from the alerts' signing secret: whoever can sign an
   alert cannot mint a broker token.
   A token is refused for another role (401), another incident (401), and once its incident is closed (403).
-- **Allow lists.** One gateway session per role (`roles.py`): `changes` allows `github_list_commits@5` and
-  `github_compare_commits@4`, `infra` allows `digitalocean_droplet-get@3` and `digitalocean_image-list@2`, `verifier` allows
-  `digitalocean_droplet-get@3`; everything else is denied by the session's policy, and the broker refuses any other tool
-  before it reaches the gateway (403). The Remediator's session, one per incident, asks before `digitalocean_restore-droplet@3`
-  and denies `digitalocean_droplet-delete@3`. `metrics` has no actions: 404.
+- **Allow lists.** One gateway endpoint per role (`roles.py`): `changes` allows `github_list_commits` and
+  `github_compare_commits`, `infra` allows `digitalocean_droplet-get` and `digitalocean_image-list`, `verifier` allows
+  `digitalocean_droplet-get`; everything else is denied by the endpoint's policy, and the broker refuses any other tool
+  before it reaches the gateway (403). The Remediator's endpoint, one per incident, asks before `digitalocean_restore-droplet`
+  and denies `digitalocean_droplet-delete`. `metrics` has no actions: 404.
 - **Revocation.** `DELETE /incidents/{id}` revokes the incident's tokens first, then the commander's host deletes the
-  specialists' hosts, then the relay deletes the commander's host and the incident's Remediator session. A close refused (a
+  specialists' hosts, then the relay deletes the commander's host and the incident's Remediator endpoint. A close refused (a
   run in flight) revokes nothing.
 - **Limits.** At most 60 requests a minute per role and incident (429 beyond), a request body of at most 64 KiB, arguments a
   JSON object, a rationale of at most 500 characters, 30 seconds for the gateway's answer.
@@ -223,12 +223,12 @@ uv run examples/incident_common/setup_droplet.py --cleanup
 
 `scripts/delete_all.py` lists and deletes what a killed run left behind (the commander's host and the specialists' hosts).
 
-The relay opens one Remediator session per incident, named `microvm-ag-<incident>-remediator-<hex>`, and deletes it when it
+The relay creates one Remediator endpoint per incident, named `microvm-ag-<incident>-remediator-<hex>`, and deletes it when it
 closes the incident, after the hosts. When it starts, it also deletes those of every incident whose commander host its store
 records as deleted (a run killed while closing, or hosts deleted by `scripts/delete_all.py`). A killed relay leaves its
-sessions: the open incidents' Remediator sessions, and its own, named `microvm-ag-<hex>` (one for the approver's facts and
-one per role the broker served). A Remediator session of an incident that was never closed stays until a relay closes that
-incident. Delete leftovers through the Action Gateway API (`GET /v2/action-gateway/sessions`, `DELETE /v2/action-gateway/sessions/{sessionUrn}`).
+endpoints: the open incidents' Remediator endpoints, and its own, named `microvm-ag-<hex>` (one for the approver's facts and
+one per role the broker served). A Remediator endpoint of an incident that was never closed stays until a relay closes that
+incident. Delete leftovers through the Action Gateway API (`GET /v2/action-gateway/endpoints`, `DELETE /v2/action-gateway/endpoints/{id}`).
 
 ## The relay's routes
 
@@ -242,7 +242,7 @@ and `/policy` needs `Authorization: Bearer <DO_INCIDENT_OPERATOR_TOKEN>` (whoeve
 | `GET /` | The [approvals page](#the-approvals-page) (`web/v2`, or `--page` / `DO_INCIDENT_PAGE`); its files under `/static`. No token needed to load it: the page asks for one |
 | `GET /incidents` | The commander hosts and what the relay last saw of each, its specialists' hosts among it, as far as it passed through the relay (no host is woken up) |
 | `GET /incidents/{id}` | The incident: its pending approvals (the interrupts its specialists wait on, each with its `task` and `role`) with the facts the relay reads itself, the last message, its tasks and its story |
-| `DELETE /incidents/{id}` | Closes the incident: revokes its broker tokens, the commander's host deletes the specialists' hosts its gateway created, the relay deletes the commander's host, then the incident's Remediator session; answers with what it deleted; 409 while a run is in flight |
+| `DELETE /incidents/{id}` | Closes the incident: revokes its broker tokens, the commander's host deletes the specialists' hosts its gateway created, the relay deletes the commander's host, then the incident's Remediator endpoint; answers with what it deleted; 409 while a run is in flight |
 | `POST /incidents/{id}/decision` | `{"interrupt_id", "decision": "approve" \| "deny", "reason"?}`: resumes the specialist's thread and returns its run; 409 when the approval is no longer waiting (a second approver) |
 | `POST /incidents/{id}/messages` | `{"text"}`: another turn, when the commander is idle |
 | `GET /incidents/{id}/runs/{run_id}/events` | Server-sent events: the run's tool calls and the story as it changes, then its end |
@@ -303,7 +303,7 @@ quick tunnel; the approval answered by the console (no waiting for a human).
   same models, there are no hosts to boot and the alert to the postmortem takes about a third of that.
 
 The read-only specialists made 9 broker calls in that run, each one of its role's actions; the Remediator made two requests
-through the broker (the restore, held for the approval, and the delete, refused by its session's policy).
+through the broker (the restore, held for the approval, and the delete, refused by its endpoint's policy).
 
 With `console.py demo --web --delete`, the restore is approved by a human on the approvals page, and the times from the
 approval on include the human's.

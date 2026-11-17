@@ -73,7 +73,7 @@ SHARED_ENV = ("DO_INCIDENT_URL", "DO_INCIDENT_DROPLET_ID", "DO_INCIDENT_REPO", "
 # (EXAMPLES_MODEL, or EXAMPLES_STRONG_MODEL for a role that defaults to Sonnet) and the provider's own key.
 PROVIDER_KEYS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "MISTRAL_API_KEY", "GROQ_API_KEY", "COHERE_API_KEY")
 # The relay's broker, for every role that reaches the gateway (the read-only roles and the Remediator). No specialist's host
-# gets a gateway token: the relay holds it and every session.
+# gets a gateway token: the relay holds it and every gateway endpoint.
 BROKER_ENV = ("DO_INCIDENT_BROKER_URL", "DO_INCIDENT_ID")
 
 

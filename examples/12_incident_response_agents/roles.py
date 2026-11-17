@@ -3,10 +3,10 @@ role's graph) and the relay (the broker's allow lists, the page's tiles). Each s
 own, with its own model and its own Action Gateway actions.
 
 Every specialist reaches the Action Gateway through the relay's broker (relay.py, `POST /incidents/{id}/actions/{role}`). The
-relay holds the gateway token and every session; the specialist's host holds only a token for its own role in its own incident.
+relay holds the gateway token and every gateway endpoint; the specialist's host holds only a token for its own role in its own incident.
 No gateway credential enters a specialist's MicroVM, and the policy is set by the relay, outside the agent's reach.
-- `actions`: the read-only roles, one allow-only session per role.
-- the Remediator: one session per incident whose policy asks a human before the restore and refuses a delete. Its broker token
+- `actions`: the read-only roles, one allow-only endpoint per role.
+- the Remediator: one endpoint per incident whose policy asks a human before the restore and refuses a delete. Its broker token
   can request an action but never approve one: the relay asks the human and, once approved, runs the action itself.
 """
 
@@ -24,8 +24,8 @@ def inference_model(default: str) -> str:
     return os.environ.get(variable) or default
 
 
-REMEDIATOR_ASK = ("digitalocean_restore-droplet@3",)
-REMEDIATOR_DENY = ("digitalocean_droplet-delete@3",)
+REMEDIATOR_ASK = ("digitalocean_restore-droplet",)
+REMEDIATOR_DENY = ("digitalocean_droplet-delete",)
 
 
 @dataclass(frozen=True)
@@ -49,11 +49,11 @@ ROLES: tuple[Role, ...] = (
          "Reads the repository's commits in its own agent host (through its own Action Gateway actions). Give it the "
          "repository (owner/name) and, if known, the error onset; it answers with the change timeline, the commit just before "
          "the onset and what that commit changed.",
-         ("github_list_commits@5", "github_compare_commits@4")),
+         ("github_list_commits", "github_compare_commits")),
     Role("infra", "Infra Analyst", HAIKU,
          "Reads the droplet and its snapshots in its own agent host (through its own Action Gateway actions). Give it the "
          "droplet id; it answers with the droplet's state and its snapshots (id, name, age).",
-         ("digitalocean_droplet-get@3", "digitalocean_image-list@2")),
+         ("digitalocean_droplet-get", "digitalocean_image-list")),
     Role("remediator", "Remediator", HAIKU,
          "The only agent that can change anything, in its own agent host. Give it the exact action and its arguments (for the "
          "restore: digitalocean_restore-droplet with ID and ImageID) and the reason, with the evidence in at most 3 sentences. "
@@ -62,7 +62,7 @@ ROLES: tuple[Role, ...] = (
          "Checks, in its own agent host, whether the service is healthy again; it did not do the fix and only reads. Start it "
          "after the restore ran, with the droplet id: it samples the service's health and answers with a verdict, healthy or "
          "not_healthy, and the evidence.",
-         ("digitalocean_droplet-get@3",)),
+         ("digitalocean_droplet-get",)),
 )
 BY_NAME = {role.name: role for role in ROLES}
 NAMES = tuple(role.name for role in ROLES)
@@ -76,8 +76,8 @@ def broker_token_name(role: str) -> str:
     return f"DO_INCIDENT_BROKER_TOKEN_{role.upper()}"
 
 
-def remediator_session_prefix(incident: str) -> str:
-    """The name prefix of the Remediator's gateway session in one incident (the relay's broker opens it on the first request);
+def remediator_endpoint_prefix(incident: str) -> str:
+    """The name prefix of the Remediator's gateway endpoint in one incident (the relay's broker creates it on the first request);
     closing the incident deletes it, and the relay sweeps by this prefix what a killed relay left."""
     return f"microvm-ag-{incident}-remediator-"
 

@@ -28,11 +28,11 @@ The broker (the broker's port, the only one the specialists' MicroVMs reach; in 
                                                    {"op": "invoke", "tool", "arguments", "rationale"} (the Remediator:
                                                    also "call", its tool call's id; no "list")
                                                    with `Authorization: Bearer <that role's token for that incident>`
-The relay holds the gateway token (DO_ACTION_GATEWAY_TOKEN) and every gateway session: one per read-only role (roles.py), each
+The relay holds the gateway token (DO_ACTION_GATEWAY_TOKEN) and every gateway endpoint: one per read-only role (roles.py), each
 allowing that role's actions and nothing else, and one per incident for the Remediator, whose policy asks a human before the
 restore and refuses a delete. The Remediator's `invoke` of an `ask` action answers {"approval": {...}} and runs nothing: the
 relay decides it (`Relay.decide`, after an approver's decision) and, once approved, runs the action itself. No token in a
-specialist's MicroVM can approve anything or open a session of its own. A role's token for an incident is an HMAC of the incident and the role
+specialist's MicroVM can approve anything or create a gateway endpoint of its own. A role's token for an incident is an HMAC of the incident and the role
 under the broker key (DO_INCIDENT_BROKER_KEY, else a random key the relay keeps in outputs/broker.key; never derived from
 the alerts' signing secret), so a restarted relay accepts the same tokens. Each token gets at most BROKER_RATE requests per
 minute (429 beyond). A token works only for its own role in its own incident, and only while that incident is open: closing the
@@ -117,7 +117,7 @@ from roles import (
     ROLES,
     bare,
     broker_token_name,
-    remediator_session_prefix,
+    remediator_endpoint_prefix,
 )
 
 from langchain_digitalocean_microvm.agent_host import HostHandle, HostSpec, HostStatus
@@ -128,7 +128,7 @@ from langchain_digitalocean_microvm.agent_host.store import (
     default_db_path,
 )
 from langchain_digitalocean_microvm.integrations.action_gateway import (
-    SESSION_PREFIX,
+    ENDPOINT_PREFIX,
     PendingApproval,
 )
 
@@ -523,7 +523,7 @@ async def _active_run(client: LangGraphClient, thread_id: str) -> bool:
     return False
 
 
-# -- the broker: the read-only specialists' actions, under each role's allow-only gateway session ---------------------------------
+# -- the broker: the read-only specialists' actions, under each role's allow-only gateway endpoint ---------------------------------
 
 
 class BrokerRefused(Exception):
@@ -561,11 +561,11 @@ def broker_token(key: bytes, incident: str, role: str) -> str:
 
 
 class Broker:
-    """The gateway sessions the specialists' actions run in (opened on first use), and the tokens that reach them: one
-    allow-only session per read-only role, and one per incident for the Remediator (ask before the restore, refuse a delete),
+    """The gateway endpoints the specialists' actions run in (created on first use), and the tokens that reach them: one
+    allow-only endpoint per read-only role, and one per incident for the Remediator (ask before the restore, refuse a delete),
     whose approvals only the relay decides (`decide`).
 
-    `client_factory` gives each session its own `GatewayClient` (the real one with the gateway token, or the simulated world's).
+    `client_factory` gives each endpoint its own `GatewayClient` (the real one with the gateway token, or the simulated world's).
     `is_open(incident)` says whether an incident's tokens still work (the relay: its commander host is not gone or going).
     """
 
@@ -575,7 +575,7 @@ class Broker:
         self.key, self.url, self.client_factory, self.is_open = key, url.rstrip("/"), client_factory, is_open
         self.pins = {tool: dict(arguments) for tool, arguments in (pins or {}).items()}  # tool -> {argument: the one value allowed}
         self._gateways: dict[str, Any] = {}
-        self._remediators: dict[str, Any] = {}  # incident -> the Remediator's gateway session
+        self._remediators: dict[str, Any] = {}  # incident -> the Remediator's gateway endpoint
         # The Remediator's requests that asked for an approval, by proposal id: {"incident", "call", "pending", "text"}; "text"
         # is the outcome once decided. A request repeated for the same tool call (a resumed run) finds its proposal again.
         self._proposals: dict[str, dict[str, Any]] = {}
@@ -620,7 +620,7 @@ class Broker:
             recent.append(now)
 
     def remediator(self, incident: str) -> Any:
-        """The incident's Remediator session: the policy is the relay's, set here, not the agent's."""
+        """The incident's Remediator endpoint: the policy is the relay's, set here, not the agent's."""
         from langchain_digitalocean_microvm.integrations.action_gateway import (
             ActionGateway,
             ActionPolicy,
@@ -630,7 +630,7 @@ class Broker:
             if incident not in self._remediators:
                 policy = ActionPolicy(ask=list(REMEDIATOR_ASK), deny=list(REMEDIATOR_DENY))
                 self._remediators[incident] = ActionGateway(policy, tools=list(REMEDIATOR_TOOLS), client=self.client_factory(),
-                                                            session_prefix=remediator_session_prefix(incident))
+                                                            endpoint_prefix=remediator_endpoint_prefix(incident))
             return self._remediators[incident]
 
     def answer(self, incident: str, role: str, body: Any) -> dict[str, Any]:
@@ -672,7 +672,7 @@ class Broker:
         return {"text": text}
 
     def _remediate(self, incident: str, body: Any) -> dict[str, Any]:
-        """The Remediator's request: search its session, or request an action. An `ask` action runs nothing here; it answers
+        """The Remediator's request: search its endpoint, or request an action. An `ask` action runs nothing here; it answers
         {"approval": {"proposal", "tool", "arguments", "rationale", "expires_at"}} until the relay decides it, then
         {"text": the outcome} to the same tool call."""
         if not isinstance(body, dict) or body.get("op") not in ("search", "invoke"):
@@ -735,7 +735,7 @@ class Broker:
         return text
 
     def forget(self, incident: str) -> None:
-        """A closed incident: delete its Remediator session and drop its proposals."""
+        """A closed incident: delete its Remediator endpoint and drop its proposals."""
         with self._lock:
             gateway = self._remediators.pop(incident, None)
             for proposal_id in [p for p, v in self._proposals.items() if v["incident"] == incident]:
@@ -758,24 +758,24 @@ class Relay:
     specialists' actions, and resumes their threads for approvers.
 
     `hosts` is a host manager (MicroVMAgentHost, or LocalDevServerHost in local mode); `store` the gateway store its hosts
-    and their tokens are recorded in; `transport` reaches the hosts (tests). `gateway` is a read-only gateway session of
+    and their tokens are recorded in; `transport` reaches the hosts (tests). `gateway` is a read-only gateway endpoint of
     the relay's (the approver's facts come from it, not from the agents); None shows no facts. `broker`: None in local mode
     (the specialists reach the simulated world directly). `probe_service`: the relay reads the service's health itself (real
     mode). `keepalive`: seconds between the relay's reads of an active commander run (default: a third of the hosts' idle
-    timeout, at most 30 s); `watch_seconds`: between the reads of an incident's tasks while it has work open. `sessions`: a
-    gateway client that lists and deletes sessions (`list_sessions`, `delete_session`): the relay deletes the Remediator's
-    sessions of an incident it closes (`sweep`); None sweeps nothing. `postmortems`: the directory where closing an incident
+    timeout, at most 30 s); `watch_seconds`: between the reads of an incident's tasks while it has work open. `endpoints`: a
+    gateway client that lists and deletes endpoints (`list_endpoints`, `delete_endpoint`): the relay deletes the Remediator's
+    endpoints of an incident it closes (`sweep`); None sweeps nothing. `postmortems`: the directory where closing an incident
     writes its postmortem (the recorded timeline and verdict, then the commander's narrative); None writes nothing.
     """
 
     def __init__(self, hosts: Any, secret: str, service: Any, *, spec: HostSpec, store: GatewayStore, gateway: Any = None,
                  broker: Broker | None = None, probe_service: bool = False, transport: httpx.AsyncBaseTransport | None = None,
-                 keepalive: float | None = None, watch_seconds: float = WATCH_SECONDS, sessions: Any = None,
+                 keepalive: float | None = None, watch_seconds: float = WATCH_SECONDS, endpoints: Any = None,
                  postmortems: Path | None = None) -> None:
         if not secret:
             raise ValueError("the relay needs the channel's signing secret (DO_INCIDENT_RELAY_SECRET)")
         self.hosts, self.secret, self.service, self.spec, self.gateway = hosts, secret, service, spec, gateway
-        self.store, self.transport, self.broker, self.sessions = store, transport, broker, sessions
+        self.store, self.transport, self.broker, self.endpoints = store, transport, broker, endpoints
         self.postmortems = postmortems  # where closing an incident writes its postmortem (None: nowhere)
         self.probe_service = probe_service  # the real service answers /health; a simulated world lives in this process
         idle = getattr(hosts, "idle_timeout_seconds", None)
@@ -954,7 +954,7 @@ class Relay:
     async def adopt(self) -> list[str]:
         """Pick up the incidents a previous relay left open (a restarted relay; `serve` calls it on startup): keep the host
         of a commander run still active awake, and watch every open incident's tasks again (nothing else would wake its
-        commander or keep its host awake while specialists work), and delete the Remediator's sessions the closed incidents
+        commander or keep its host awake while specialists work), and delete the Remediator's endpoints the closed incidents
     left (`sweep`). Returns the incidents adopted."""
         adopted, closed = [], []
         for row in self.store.list_hosts(graph_id=GRAPH):
@@ -971,10 +971,10 @@ class Relay:
                 self._tasks[incident] = asyncio.create_task(self._keep_awake(incident, thread.run_id))
             self.watch(incident)
             adopted.append(incident)
-        if closed:  # a run killed before or while closing them left their Remediator's sessions
+        if closed:  # a run killed before or while closing them left their Remediator's endpoints
             swept = await asyncio.to_thread(self.sweep, closed)
             if swept:
-                log_event(event="relay", adopted=adopted, sessions=swept)
+                log_event(event="relay", adopted=adopted, endpoints=swept)
         return adopted
 
     async def close(self) -> None:
@@ -1288,23 +1288,23 @@ class Relay:
                          self.pending, self.subruns, self._notified):
                 kept.pop(incident, None)
         if self.broker is not None:
-            await asyncio.to_thread(self.broker.forget, incident)  # its Remediator session and proposals
+            await asyncio.to_thread(self.broker.forget, incident)  # its Remediator endpoint and proposals
         swept = await asyncio.to_thread(self.sweep, [incident])
-        log_event(event="relay", incident=incident, deleted=deleted, sessions=swept)
+        log_event(event="relay", incident=incident, deleted=deleted, endpoints=swept)
         return [*deleted, host_id, *swept]
 
     def sweep(self, incidents: list[str]) -> list[str]:
-        """Delete the Remediator's gateway sessions of these closed incidents that are still listed: the broker closes the
-        incident's session, but a killed relay never did. Returns the names deleted; a failure is logged, not raised (the hosts are gone)."""
-        if self.sessions is None or not incidents:
+        """Delete the Remediator's gateway endpoints of these closed incidents that are still listed: the broker deletes the
+        incident's endpoint, but a killed relay never did. Returns the names deleted; a failure is logged, not raised (the hosts are gone)."""
+        if self.endpoints is None or not incidents:
             return []
-        prefixes = tuple(remediator_session_prefix(i) for i in incidents)
+        prefixes = tuple(remediator_endpoint_prefix(i) for i in incidents)
         swept = []
         try:
-            for session in self.sessions.list_sessions(prefix=SESSION_PREFIX):
-                name = str(session.get("name") or "")
-                if name.startswith(prefixes) and session.get("sessionUrn"):
-                    self.sessions.delete_session(str(session["sessionUrn"]))
+            for endpoint in self.endpoints.list_endpoints(prefix=ENDPOINT_PREFIX):
+                name = str(endpoint.get("name") or "")
+                if name.startswith(prefixes) and endpoint.get("id"):
+                    self.endpoints.delete_endpoint(str(endpoint["id"]))
                     swept.append(name)
         except Exception as exc:  # noqa: BLE001 - the incident is closed either way; say what was left
             log_event(event="relay", incidents=incidents, sweep="error", swept=swept, error=str(exc)[:300])
@@ -1595,12 +1595,12 @@ def pins_for(service: Any) -> dict[str, dict[str, Any]]:
     return pins
 
 
-READS = ["digitalocean_droplet-get@3", "digitalocean_image-list@2"]  # the relay's own reads: the approver's facts
+READS = ["digitalocean_droplet-get", "digitalocean_image-list"]  # the relay's own reads: the approver's facts
 
 
 def build(local: bool, broker_port: int | None = None) -> tuple[Relay, Any, Any, Any]:
     """The relay as `serve` and `console.py demo` run it: hosts, the store, the service (local: the simulated world, served to the
-    hosts), a read-only gateway session of its own for the approver's facts, and the broker (local mode: on 127.0.0.1 at
+    hosts), a read-only gateway endpoint of its own for the approver's facts, and the broker (local mode: on 127.0.0.1 at
     `broker_port`, default DO_INCIDENT_BROKER_PORT or 8788, for the Remediator). Returns the relay, hosts, gateway and the
     world's server."""
     from langchain_digitalocean_microvm.integrations.action_gateway import (
@@ -1612,7 +1612,7 @@ def build(local: bool, broker_port: int | None = None) -> tuple[Relay, Any, Any,
     server = None
     if local:
         from incident_common.world import SimulatedWorld
-        from incident_common.world_server import WorldSessionsClient, serve
+        from incident_common.world_server import WorldEndpointsClient, serve
 
         from langchain_digitalocean_microvm.integrations.action_gateway_local import (
             LocalActionGatewayClient,
@@ -1624,13 +1624,13 @@ def build(local: bool, broker_port: int | None = None) -> tuple[Relay, Any, Any,
         os.environ.update({"DO_INCIDENT_URL": url, "DO_INCIDENT_WORLD_URL": url, "DO_INCIDENT_DROPLET_ID": str(service.droplet_id),
                            "DO_INCIDENT_REPO": service.repo})
         client: Any = LocalActionGatewayClient(actions=service.actions())
-        sessions: Any = WorldSessionsClient(url)  # the Remediators' simulated sessions are recorded on the world server
+        endpoints: Any = WorldEndpointsClient(url)  # the Remediators' simulated endpoints are recorded on the world server
         world_url = url
         port = broker_port or int(os.environ.get("DO_INCIDENT_BROKER_PORT", "8788"))
         broker_url = f"http://127.0.0.1:{port}"
 
-        def broker_client() -> Any:  # the broker's sessions, recorded on the world server like the real gateway's list
-            return WorldSessionsClient(world_url, actions=service.actions())
+        def broker_client() -> Any:  # the broker's endpoints, recorded on the world server like the real gateway's list
+            return WorldEndpointsClient(world_url, actions=service.actions())
     else:
         from incident_common.world import make_service
 
@@ -1643,7 +1643,7 @@ def build(local: bool, broker_port: int | None = None) -> tuple[Relay, Any, Any,
             raise SystemExit("real mode: set DO_INCIDENT_BROKER_URL to the public https URL of the relay's broker port "
                              "(a tunnel to --broker-port; see README.md)")
         client = ActionGatewayClient(token)
-        sessions = ActionGatewayClient(token)
+        endpoints = ActionGatewayClient(token)
         broker_url = url
 
         def broker_client() -> Any:
@@ -1652,7 +1652,7 @@ def build(local: bool, broker_port: int | None = None) -> tuple[Relay, Any, Any,
     hosts = make_hosts(local)
     store = make_store(local)
     relay = Relay(hosts, os.environ.get("DO_INCIDENT_RELAY_SECRET", ""), service, spec=host_spec(local), store=store,
-                  gateway=gateway, probe_service=not local, sessions=sessions,
+                  gateway=gateway, probe_service=not local, endpoints=endpoints,
                   postmortems=Path(os.environ.get("DO_INCIDENT_POSTMORTEMS") or HERE / "outputs" / "postmortems"))
     relay.broker = Broker(broker_key(), broker_url, broker_client, relay.is_open, pins=pins_for(service))
     return relay, hosts, gateway, server

@@ -155,3 +155,16 @@ def test_deep_probes_each_model_the_selected_examples_use() -> None:
     asked.clear()
     check_setup.evaluate({**REAL, "DO_INFERENCE_MODEL": "m1", "DO_INFERENCE_STRONG_MODEL": "m1"}, probes, local=False)
     assert asked == ["m1"]
+
+
+def test_deep_makes_one_gateway_call_and_reports_a_refusal() -> None:
+    env = {**REAL, "DO_ACTION_GATEWAY_TOKEN": "g", "DO_ACTION_GATEWAY_ACTOR_ID": "me"}
+    served = _probes()
+    served.gateway_call = lambda: None
+    lines = {line.what: line for line in check_setup.evaluate(env, served, local=False).checks}
+    assert lines["Action Gateway call"].ok is True
+    refused = _probes()
+    refused.gateway_call = lambda: "Action Gateway error 403: no policy"
+    lines = {line.what: line for line in check_setup.evaluate(env, refused, local=False).checks}
+    assert lines["Action Gateway call"].ok is False and "403" in lines["Action Gateway call"].detail
+    assert "Action Gateway call" not in {line.what for line in check_setup.evaluate(env, _probes(), local=False).checks}
