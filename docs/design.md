@@ -331,8 +331,8 @@ which creates the endpoint with its first version: tools, policy and actor; data
 - **The data plane comes from the service.** The client takes the host from the `mcp_url` the create answers with and
   accepts only `https` on `do-ai.run` / `do-ai-test.run`, so a token is never sent to a host the answer names elsewhere;
   an endpoint it did not create is looked up (`GET /endpoints/{id}`) once. `DO_ACTION_GATEWAY_DATA_URL` overrides it.
-- **Slugs need no version.** A tool without `@version` gets the catalog's released version, so the examples name tools
-  only and keep working when a toolkit is re-released; a pinned `name@version` is refused when it is no longer released.
+- **Slugs need no version.** A tool without `@version` gets the catalog's released version, and the examples name
+  tools that way; a pinned `name@version` is refused when the catalog no longer releases it.
 
 - **Interrupts, not a callback.** `requires_approval` and a connect link both stop the tool with a
   LangGraph `interrupt`; the application resumes the graph. The decision is posted with the caller's
