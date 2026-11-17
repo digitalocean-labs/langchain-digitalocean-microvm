@@ -134,3 +134,24 @@ def test_deep_uses_a_throwaway_sandbox_and_always_deletes_it(monkeypatch: pytest
     monkeypatch.setattr(MicroVMLifecycle, "get_or_create", boom)
     assert "no room" in (probes.deep() or "")
     assert len(deleted) == 2  # deleted although the check failed
+
+
+def test_deep_probes_each_model_the_selected_examples_use() -> None:
+    asked: list[str] = []
+
+    def access(model: str) -> str | None:
+        asked.append(model)
+        return "403: the key cannot use this model" if "sonnet" in model else None
+
+    probes = _probes()
+    probes.model_access = access
+    report = check_setup.evaluate(REAL, probes, local=False)
+    lines = {line.what: line for line in report.checks if line.what.startswith("Model ")}
+    assert asked == ["anthropic-claude-haiku-4.5", "anthropic-claude-4.6-sonnet"]
+    assert lines["Model anthropic-claude-haiku-4.5"].ok is True and lines["Model anthropic-claude-4.6-sonnet"].ok is False
+    asked.clear()
+    check_setup.evaluate(REAL, probes, local=False, only={"01", "03"})
+    assert asked == ["anthropic-claude-haiku-4.5"]  # no example with a strong model selected
+    asked.clear()
+    check_setup.evaluate({**REAL, "DO_INFERENCE_MODEL": "m1", "DO_INFERENCE_STRONG_MODEL": "m1"}, probes, local=False)
+    assert asked == ["m1"]

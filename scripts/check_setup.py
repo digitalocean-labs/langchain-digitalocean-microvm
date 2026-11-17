@@ -6,7 +6,9 @@ Reads `.env` (variables set in the shell win), prints no secret, creates nothing
   a missing or wrong token, the team's MicroVM limit, how many MicroVMs are on the team and how many
   of them you created, and the hourly price of a running MicroVM of your size as the API states it;
 - the model: `DO_MODEL_ACCESS_KEY` is accepted by Serverless Inference (a model-list read), or
-  `EXAMPLES_MODEL` plus the provider key it names;
+  `EXAMPLES_MODEL` plus the provider key it names. `--deep` also sends a one-token request per model the
+  selected examples use (`DO_INFERENCE_MODEL`, and `DO_INFERENCE_STRONG_MODEL` for examples 07-12), since a key
+  can be scoped to specific models;
 - the Action Gateway token (a one-item tool-catalog read);
 - the variables each example reads, and whether the team has room for it.
 
@@ -43,6 +45,8 @@ from langchain_digitalocean_microvm.owner import is_mine
 from langchain_digitalocean_microvm.status import MicroVMStatus
 
 INFERENCE_URL = "https://inference.do-ai.run/v1/models"
+INFERENCE_CHAT_URL = "https://inference.do-ai.run/v1/chat/completions"
+STRONG_MODEL_EXAMPLES = {"07", "08", "09", "10", "11", "12"}  # the examples with an orchestrating (strong) model
 ACTION_GATEWAY_URL = "https://api.digitalocean.com/v2/action-gateway/tools"
 
 # Where a provider's key lives, for EXAMPLES_MODEL ("anthropic:claude-haiku-4-5" -> ANTHROPIC_API_KEY).
@@ -106,6 +110,7 @@ class Probes:
     model_key: Callable[[], str | None]  # None when accepted, else why not
     gateway: Callable[[], str | None]
     deep: Callable[[], str | None] | None = None
+    model_access: Callable[[str], str | None] | None = None  # a one-token request for a model id; None when it works
 
 
 @dataclass
@@ -150,6 +155,16 @@ def hourly_price(options: Mapping[str, object], size: MicroVMSize) -> float | No
         return float(pricing["price_per_vcpu_hour"]) * size.cpu + float(pricing["price_per_gib_memory_hour"]) * size.memory / 1024
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _needed_models(env: Mapping[str, str], only: set[str] | None) -> list[str]:
+    """The Serverless Inference model ids the selected examples use (see examples/README.md)."""
+    models = [env.get("DO_INFERENCE_MODEL") or "anthropic-claude-haiku-4.5"]
+    if only is None or only & STRONG_MODEL_EXAMPLES:
+        strong = env.get("DO_INFERENCE_STRONG_MODEL") or "anthropic-claude-4.6-sonnet"
+        if strong not in models:
+            models.append(strong)
+    return models
 
 
 def evaluate(env: Mapping[str, str], probes: Probes | None, *, local: bool, only: set[str] | None = None) -> Report:
@@ -200,6 +215,10 @@ def evaluate(env: Mapping[str, str], probes: Probes | None, *, local: bool, only
     elif env.get("DO_MODEL_ACCESS_KEY") and probes is not None:
         problem = probes.model_key()
         add(Line(problem is None, "Model (DO_MODEL_ACCESS_KEY)", problem or "accepted by Serverless Inference"))
+        if problem is None and probes.model_access is not None:
+            for model in _needed_models(env, only):
+                refused = probes.model_access(model)
+                add(Line(refused is None, f"Model {model}", refused or "the key can use it"))
     else:
         add(Line(None if probes is None else True, "Model",
                  "variables set" + (" (not checked: offline)" if probes is None else "")))
@@ -279,6 +298,19 @@ def _http_probe(url: str, key: str, *, params: Mapping[str, str] | None = None) 
     return f"unexpected answer {response.status_code}"
 
 
+def _model_probe(key: str, model: str) -> str | None:
+    try:
+        response = httpx.post(INFERENCE_CHAT_URL, headers={"Authorization": f"Bearer {key}"}, timeout=60.0,
+                              json={"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]})
+    except httpx.HTTPError as exc:
+        return f"could not reach it: {exc}"
+    if response.status_code == 200:
+        return None
+    if response.status_code in (401, 403, 404):
+        return f"{response.status_code}: the key cannot use this model, or it does not exist (scope the key to it, or set the model variable)"
+    return f"unexpected answer {response.status_code}"
+
+
 def live_probes(env: Mapping[str, str], *, deep: bool) -> tuple[Probes, MicroVMClient | None]:
     token = env.get("DO_MICROVM_API_TOKEN")
     client = MicroVMClient(token) if token else None
@@ -322,6 +354,7 @@ def live_probes(env: Mapping[str, str], *, deep: bool) -> tuple[Probes, MicroVMC
         model_key=lambda: _http_probe(INFERENCE_URL, env.get("DO_MODEL_ACCESS_KEY", "")),
         gateway=lambda: _http_probe(ACTION_GATEWAY_URL, env.get("DO_ACTION_GATEWAY_TOKEN", ""), params={"per_page": "1"}),
         deep=deep_check if deep and client else None,
+        model_access=(lambda model: _model_probe(env.get("DO_MODEL_ACCESS_KEY", ""), model)) if deep else None,
     ), client
 
 
