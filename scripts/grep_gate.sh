@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Public-wording gate: everything in this repository must read as public-ready.
-# Fails on dates, release-stage wording, planning labels and internal references in tracked
+# Fails on dates, release-stage wording, planning labels and unresolved notes in tracked
 # (and untracked, not ignored) files. Exempt: lock files, recorded API fixtures, ISO timestamps
 # with a time part (synthetic test data).
 #
