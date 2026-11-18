@@ -427,7 +427,7 @@ def test_setup_shows_the_connect_link_instead_of_failing_outside_a_graph(example
             return {"error": {"message": f"connect your account: {link}"}}
         return {"output": {"commits": [{"sha": "b" * 40}, {"sha": "a" * 40}]}}
 
-    gateway = setup.ActionGateway(setup.ActionPolicy(allow=["github_list_commits@5"]), tools=["github_list_commits@5"],
+    gateway = setup.ActionGateway(setup.ActionPolicy(allow=["github_list_commits"]), tools=["github_list_commits"],
                                   client=SimpleNamespace(create_endpoint=lambda *a: "ep-1", delete_endpoint=lambda endpoint_id: None,
                                                          invoke=invoke, close=lambda: None))
     monkeypatch.setattr(setup.sys.stdin, "isatty", lambda: False)
