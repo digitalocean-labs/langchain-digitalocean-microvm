@@ -24,7 +24,7 @@ DigitalOcean account, so most changes need nothing else.
 | `uv run pytest -m slow` | LangChain's standard sandbox suite, offline, about 5 minutes |
 | `uv run pytest -m live` | The standard suite on a real MicroVM |
 | `uv run ruff check .`, `uv run pyright` | Lint and type check (`src/`) |
-| `scripts/grep_gate.sh` | Wording gate: no dates, release-stage words, planning labels or internal references |
+| `scripts/grep_gate.sh` | Wording gate: no dates, release-stage words or planning labels; patterns in an untracked `.grep_gate_extra` add to it |
 | `gitleaks git --log-opts="--all" --redact .` | Secret scan of the history (version pinned in `.github/workflows/ci.yml`; config in `.gitleaks.toml`) |
 
 Live runs need DigitalOcean credentials in a `.env` at the repository root (copy `.env.example`;
