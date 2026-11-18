@@ -11,6 +11,7 @@
 - Tool slugs need no version: a slug without `@version` gets the released one. The examples' policies and tool lists no longer pin versions; `name@version` still pins one.
 - `scripts/check_setup.py --deep` calls one read-only action through a throwaway `microvm-ag-check-*` endpoint and deletes it.
 - `scripts/smoke_action_gateway.py --slug-version` is optional (default: no pin).
+- `scripts/grep_gate.sh` reads extra patterns from an untracked `.grep_gate_extra` (or `GREP_GATE_EXTRA`) and checks them in addition to its built-in ones.
 
 ## 0.1.0
 
