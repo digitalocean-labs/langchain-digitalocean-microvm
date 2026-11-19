@@ -56,6 +56,15 @@ STYLE = {  # status -> (border, badge)
 BUSY = {"cloning", "creating", "resuming", "running", "pausing"}
 
 
+OVERVIEW = Text(  # what the run is about, in the header
+    "Leadership needs a board pack: the headline numbers and how each region did. A team of AI agents "
+    "builds it from the sales database: four analysts take a region each, an auditor re-checks the "
+    "headline figures from its own copy of the data and a publisher assembles the document, each in a "
+    "MicroVM of its own. The store, Chinook, and its data are fictional.",
+    style="#5AB0FF", justify="center",
+)
+
+
 @dataclass
 class Tile:
     sandbox_id: str
@@ -197,7 +206,7 @@ def render(state: State, mode: str) -> Group:
     )
     if state.api_error:
         stats.append(f"   API: {state.api_error}", style="red")
-    header = Panel(Group(Align.center(title), Align.center(stats)), border_style="#0069FF")
+    header = Panel(Group(Align.center(title), OVERVIEW, Align.center(stats)), border_style="#0069FF")
 
     grid = Table.grid(padding=(0, 1), expand=True)
     columns = 3
@@ -225,7 +234,9 @@ def render(state: State, mode: str) -> Group:
     log = Table.grid(padding=(0, 2))
     for ts, line in events[::-1]:
         log.add_row(Text(time.strftime("%H:%M:%S", time.localtime(ts)), style="dim"), Text(line))
-    return Group(header, grid, Panel(log, title="lifecycle", title_align="left", border_style="grey37", height=10))
+    lifecycle = Panel(log, title="MicroVM lifecycle (cloned, resumed, paused, deleted)", title_align="left",
+                      border_style="grey37", height=10)
+    return Group(header, grid, lifecycle)
 
 
 def main() -> None:
