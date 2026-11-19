@@ -1557,7 +1557,7 @@ wheels = [
 
 [[package]]
 name = "langchain-digitalocean-microvm"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "deepagents", version = "0.7.30", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
