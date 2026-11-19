@@ -4,7 +4,7 @@
 
 **Changed**
 
-- Action Gateway: the client sends an endpoint's calls to the `mcp_url` host only when it is an `https` host on `do-ai.run`. With `DO_ACTION_GATEWAY_DATA_URL` (or `data_url=`) set, every call goes to that host and the `mcp_url` is not checked.
+- Action Gateway: the client sends an endpoint's calls to the `mcp_url` host only when it is an `https` host on `do-ai.run` or `do-ai-test.run`. With `DO_ACTION_GATEWAY_DATA_URL` (or `data_url=`) set, every call goes to that host and the `mcp_url` is not checked.
 
 ## 0.2.0
 

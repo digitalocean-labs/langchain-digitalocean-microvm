@@ -546,8 +546,8 @@ with ActionGateway(policy) as gateway:  # the endpoint's tools: the names in all
   `client=LocalActionGatewayClient()`) runs everything in memory.
 - **Endpoints.** The gateway is reached through an endpoint: `POST /v2/action-gateway/endpoints` creates one with its
   first version (the tools, the policy and the actor), which is active at once. Calls go to the data plane the endpoint's
-  `mcp_url` names (`https://actions.do-ai.run`: `POST /tools/invoke`, `POST /tools/search`, approvals), with the
-  header `X-Endpoint-Id`. The client accepts only an `https` host on `do-ai.run`; for anything else it
+  `mcp_url` names (`POST /tools/invoke`, `POST /tools/search`, approvals), with the
+  header `X-Endpoint-Id`. The client accepts only an `https` host on `do-ai.run` or `do-ai-test.run`; for anything else it
   deletes the endpoint and raises `ActionGatewayError`. `DO_ACTION_GATEWAY_DATA_URL` (or `data_url=`) sends every call
   to the host it names instead, and the returned `mcp_url` is not used.
 - **Policy.** `ActionPolicy(allow=, ask=, deny=)` lists tool names without versions; everything else
