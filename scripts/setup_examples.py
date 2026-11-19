@@ -5,15 +5,15 @@
 Without `--examples`, the common base: the MicroVMs control and access tokens, the model access key, the sandbox image
 and room on the team, which is what examples 01, 03, 05, 06, 08, 10 and 11 need. `--examples` adds each example's own
 steps (09: the Action Gateway token and actor, the demo repository, the droplet; 12: the same, plus the agent-host
-images, the host mode and the broker URL; 02: the `dcode` CLI; 07: the optional Tavily key); steps shared by several
-examples run once. Example 04 is set up as its README describes. The
-script is the write side of scripts/check_setup.py and reads the same per-example requirements.
+images, the host mode and the broker URL; 04: the default agent-host image and the host mode; 02: the `dcode` CLI;
+07: the optional Tavily key); steps shared by several examples run once. The script is the write side of
+scripts/check_setup.py and reads the same per-example requirements.
 
 Each step checks first and changes something only when it is missing or refused, so the script can be run again. It
 starts with recommendations (a team or namespace of its own, token expiry, a spend threshold, the team limit, clean-up):
 
 - Prerequisites: the commands the selected steps run (for 09 and 12: git, bash, gh and its login, ssh, ssh-keygen; for
-  12: uv and crane; crane when the sandbox image is built; for 02: dcode), each with where to get it. A missing one stops the script before it asks for
+  04 and 12: uv and crane; crane when the sandbox image is built; for 02: dcode), each with where to get it. A missing one stops the script before it asks for
   anything.
 - Tokens. DigitalOcean personal access tokens and model access keys are created in the Control Panel, so for each one
   that is missing or refused the script names the page and the scopes, reads the value without echoing it, checks it
@@ -32,8 +32,9 @@ starts with recommendations (a team or namespace of its own, token expiry, a spe
   commit's age, so rebuild it shortly before a run). The droplet: examples/incident_common/setup_droplet.py, which shows
   the Action Gateway connect links (GitHub and DigitalOcean) for the actor the first time; then
   examples/09_incident_response/prepare.py --clean (09).
-- 12: `DO_MICROVM_HOST_MODE=microvm` (asked before it is written). The commander's and the specialists' images
-  (`DO_INCIDENT_HOST_IMAGE`, `DO_INCIDENT_SPECIALISTS_IMAGE`), built with images/agent-host/build_image.py --spec into
+- 04 and 12: `DO_MICROVM_HOST_MODE=microvm` (asked before it is written). 04: the default agent-host image
+  (`DO_MICROVM_AGENT_IMAGE`, images/agent-host/build_image.py without a spec). 12: the commander's and the
+  specialists' images (`DO_INCIDENT_HOST_IMAGE`, `DO_INCIDENT_SPECIALISTS_IMAGE`), built with images/agent-host/build_image.py --spec into
   the same registry; a set image is checked against its sources (its tag is the content hash build_image.py computes
   locally with --no-push) and rebuilt when they differ. `DO_INCIDENT_BROKER_URL`: the script prints the tunnel
   command and asks for the https URL; it does not start the tunnel. Action Gateway endpoints named `microvm-ag-*` left
@@ -96,11 +97,12 @@ HOST_IMAGES = (
     ("DO_INCIDENT_SPECIALISTS_IMAGE", "the specialists' hosts", EXAMPLE_12 / "specialists" / "image.json",
      "microvm-incident-specialists"),
 )
+# 04's hosts: the default agent host (images/agent-host, no spec)
+AGENT_IMAGE = ("DO_MICROVM_AGENT_IMAGE", "04's agent hosts", None, "microvm-subagent")
 CLOUDFLARED_PAGE = "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"
 
 BY_NUMBER = {example.number: example for example in EXAMPLES}
 BASE = ("01", "03", "05", "06", "08", "10", "11")  # the examples the common base covers
-OWN_SETUP = {"04": "the agent-host image and DO_MICROVM_HOST_MODE=microvm"}
 
 
 @dataclass(frozen=True)
@@ -112,7 +114,8 @@ class Plan:
     image: bool
     gateway: bool
     incident: bool  # 09 and 12: the actor, the demo repository, the droplet
-    agents: bool  # 12: the agent-host images, host mode, the broker URL
+    hosts: bool  # 04 and 12: DO_MICROVM_HOST_MODE=microvm and agent-host images
+    agents: bool  # 12: its two images and the broker URL
     dcode: bool  # 02
     tavily: bool  # 07, optional
 
@@ -121,12 +124,17 @@ class Plan:
         chosen = [BY_NUMBER[n] for n in numbers]
         return cls(examples=tuple(numbers), model=any(e.model for e in chosen), image=any(e.image for e in chosen),
                    gateway=any(e.gateway for e in chosen), incident=bool({"09", "12"} & set(numbers)),
-                   agents="12" in numbers, dcode="02" in numbers, tavily="07" in numbers)
+                   hosts=bool({"04", "12"} & set(numbers)), agents="12" in numbers, dcode="02" in numbers,
+                   tavily="07" in numbers)
 
     @property
     def incident_label(self) -> str:
         """Which selected examples the incident steps serve, for the headings: "09", "12" or "09, 12"."""
         return ", ".join(n for n in ("09", "12") if n in self.examples)
+
+    @property
+    def hosts_label(self) -> str:
+        return ", ".join(n for n in ("04", "12") if n in self.examples)
 
     @property
     def microvms(self) -> int:
@@ -234,10 +242,12 @@ def recommendations(plan: Plan) -> str:
                   "`uv run examples/incident_common/setup_droplet.py --cleanup`.",
                   f"- {label}: the actor's GitHub and DigitalOcean connections stay after the clean-up; delete them when",
                   "  you no longer need them (Action Gateway documentation: How to Manage Connections)."]
+    if plan.hosts:
+        lines += [f"- {plan.hosts_label}: the agent-host images contain this package's code: keep them in a private",
+                  "  registry. Rebuild them after changing the package or the example; this script reports images built",
+                  "  from older sources."]
     if plan.agents:
-        lines += ["- 12: the images contain this package's code: keep them in a private registry. Rebuild them after",
-                  "  changing the package or the example; this script reports images built from older sources.",
-                  "- 12: with a tunnel, the specialists' action calls and their answers pass through the tunnel's provider;",
+        lines += ["- 12: with a tunnel, the specialists' action calls and their answers pass through the tunnel's provider;",
                   "  for anything longer-lived, see the example's README (The broker's URL)."]
     return "\n".join(lines)
 
@@ -249,8 +259,8 @@ TOOLS: tuple[tuple[str, str, str, str], ...] = (
     ("gh", "creates the public demo repository with your GitHub login", "https://cli.github.com", "repo"),
     ("ssh", "installs the service on the droplet", "OpenSSH, preinstalled on macOS and most Linux", "droplet"),
     ("ssh-keygen", "creates the droplet's temporary key pair", "OpenSSH", "droplet"),
-    ("uv", "builds the agent-host images (12)", "https://docs.astral.sh/uv/getting-started/installation/", "agents"),
-    ("crane", "pushes the images (the sandbox image when DO_MICROVM_IMAGE is unset; 12's agent-host images)",
+    ("uv", "builds the agent-host images (04, 12)", "https://docs.astral.sh/uv/getting-started/installation/", "agents"),
+    ("crane", "pushes the images (the sandbox image when DO_MICROVM_IMAGE is unset; the agent-host images of 04 and 12)",
      "https://github.com/google/go-containerregistry/blob/main/cmd/crane/README.md", "image"),
     ("dcode", "Deep Agents Code, example 02's CLI (Python 3.12+)",
      "`uv sync --all-extras` in this checkout, or examples/02_deepagents_code/README.md", "dcode"),
@@ -382,8 +392,8 @@ class Setup:
     # ── steps ─────────────────────────────────────────────────────────────────
     def prerequisites(self, *, repo: bool, droplet: bool) -> bool:
         self.heading("Prerequisites")
-        needed = {"repo": repo, "droplet": droplet, "agents": self.plan.agents, "dcode": self.plan.dcode,
-                  "image": (self.plan.image and not self.env.get("DO_MICROVM_IMAGE")) or self.plan.agents}
+        needed = {"repo": repo, "droplet": droplet, "agents": self.plan.hosts, "dcode": self.plan.dcode,
+                  "image": (self.plan.image and not self.env.get("DO_MICROVM_IMAGE")) or self.plan.hosts}
         ok = True
         for command, why, where, when in TOOLS:
             if not needed[when]:
@@ -619,13 +629,13 @@ class Setup:
                 return False
         return "09" not in self.plan.examples or _step("examples/09_incident_response/prepare.py", "--clean")
 
-    # ── 12 ────────────────────────────────────────────────────────────────────
+    # ── 04 and 12 ─────────────────────────────────────────────────────────────
     def host_mode(self) -> bool:
-        self.heading("Agent hosts (12)")
+        self.heading(f"Agent hosts ({self.plan.hosts_label})")
         if self.env.get("DO_MICROVM_HOST_MODE", "").lower() == "microvm":
             self.say("ok", "DO_MICROVM_HOST_MODE", "microvm")
             return True
-        self.say("need", "DO_MICROVM_HOST_MODE", f"{self.env.get('DO_MICROVM_HOST_MODE') or 'unset (local)'}; 12's real "
+        self.say("need", "DO_MICROVM_HOST_MODE", f"{self.env.get('DO_MICROVM_HOST_MODE') or 'unset (local)'}; the real "
                  "run needs microvm (examples 04 and 12 then start their agent hosts as MicroVMs)")
         if self.dry_run:
             self.todo.append(f"set DO_MICROVM_HOST_MODE=microvm in {self.env_file.name}")
@@ -637,12 +647,14 @@ class Setup:
         return True
 
     def host_images(self) -> bool:
+        images = ([AGENT_IMAGE] if "04" in self.plan.examples else []) + (list(HOST_IMAGES) if self.plan.agents else [])
         ok = True
-        for key, what, spec, name in HOST_IMAGES:
+        for key, what, spec, name in images:
             ok &= self.host_image(key, what, spec, name)
         return ok
 
-    def host_image(self, key: str, what: str, spec: Path, name: str) -> bool:
+    def host_image(self, key: str, what: str, spec: Path | None, name: str) -> bool:
+        """`spec` None: the default agent host (images/agent-host)."""
         image = self.env.get(key, "")
         current = content_hash(spec)
         if image:
@@ -664,14 +676,16 @@ class Setup:
         token = self.registry_token()
         if not token:
             return False
-        repository = image.rsplit(":", 1)[0] if ":" in image.rsplit("/", 1)[-1] else ""
+        repository = (image.rsplit(":", 1)[0] if ":" in image.rsplit("/", 1)[-1] else "") or (
+            self.env.get("DO_MICROVM_AGENT_REPOSITORY", "") if spec is None else "")
         if not repository:
             registry = self._registry(token)
             if not registry:
                 return False
             repository = f"{registry}/{name}"
-        print(f"       building {repository} from {spec.relative_to(ROOT)} (a few minutes the first time)")
-        done = subprocess.run([sys.executable, str(AGENT_HOST_BUILD), "--spec", str(spec), "--repository", repository,
+        source = spec.relative_to(ROOT) if spec else AGENT_HOST_BUILD.parent.relative_to(ROOT)
+        print(f"       building {repository} from {source} (a few minutes the first time)")
+        done = subprocess.run([sys.executable, str(AGENT_HOST_BUILD), *_spec_args(spec), "--repository", repository,
                                "--env-file", os.devnull], env={**os.environ, "DO_REGISTRY_TOKEN": token},
                               capture_output=True, text=True, check=False)
         pushed = next((ln.split()[1] for ln in done.stdout.splitlines() if ln.startswith("pushed ")), None)
@@ -736,11 +750,16 @@ class Setup:
         return False
 
 
-def content_hash(spec: Path) -> str | None:
-    """The tag build_image.py gives an image of `spec`'s current sources (it builds the layer locally, pushes nothing)."""
+def _spec_args(spec: Path | None) -> list[str]:
+    return ["--spec", str(spec)] if spec else []
+
+
+def content_hash(spec: Path | None) -> str | None:
+    """The tag build_image.py gives an image of `spec`'s current sources (it builds the layer locally, pushes nothing);
+    `spec` None: the default agent host."""
     if shutil.which("uv") is None or shutil.which("crane") is None:
         return None
-    done = subprocess.run([sys.executable, str(AGENT_HOST_BUILD), "--spec", str(spec), "--repository", "local/check",
+    done = subprocess.run([sys.executable, str(AGENT_HOST_BUILD), *_spec_args(spec), "--repository", "local/check",
                            "--no-push"], capture_output=True, text=True, check=False)
     found = re.search(r"content hash ([0-9a-f]+)", done.stdout)
     return found.group(1) if done.returncode == 0 and found else None
@@ -764,9 +783,6 @@ def parse_examples(value: str | None, parser: argparse.ArgumentParser) -> tuple[
     unknown = [n for n in numbers if n not in BY_NUMBER]
     if unknown:
         parser.error(f"no example {', '.join(unknown)}; the examples are {', '.join(BY_NUMBER)}")
-    own = [n for n in numbers if n in OWN_SETUP]
-    if own:
-        parser.error("; ".join(f"{n} is set up as its README describes ({OWN_SETUP[n]})" for n in own))
     return numbers
 
 
@@ -801,8 +817,10 @@ def main(argv: list[str] | None = None) -> int:
         ready &= setup.repo(refresh=args.refresh_repo)
     if ready and droplet:
         ready &= setup.droplet()
+    if plan.hosts:
+        ready &= setup.host_mode() & setup.host_images()
     if plan.agents:
-        ready &= setup.host_mode() & setup.host_images() & setup.broker()
+        ready &= setup.broker()
         if setup.env.get("DO_ACTION_GATEWAY_TOKEN") and check_gateway(setup.env["DO_ACTION_GATEWAY_TOKEN"], setup.env) is None:
             setup.leftovers()
     if ready and not args.dry_run:
@@ -816,12 +834,15 @@ def main(argv: list[str] | None = None) -> int:
                       "scripts/check_setup.py." if ready else "Not ready: see To do. Run without --dry-run to set it up."))
     elif ready:
         print("\nReady. Run the examples as their READMEs describe (examples/README.md).")
-        if droplet:
+        if droplet and "09" in plan.examples:
             print("09 (examples/09_incident_response/README.md, Run (real mode)):\n"
                   "  uv run examples/incident_common/setup_droplet.py --deploy-bad\n"
                   "  uv run examples/09_incident_response/dashboard.py          # terminal 2\n"
                   "  uv run examples/09_incident_response/run_script.py --delete\n"
                   "  uv run examples/incident_common/setup_droplet.py --cleanup  # afterwards")
+        if "04" in plan.examples:
+            print("04 (examples/04_async_subagents/README.md, Real MicroVMs):\n"
+                  "  uv run examples/04_async_subagents/run_script.py --with-researcher --delete")
         if plan.agents:
             print("12 (examples/12_incident_response_agents/README.md, Run (real mode)), with the tunnel running:\n"
                   "  uv run examples/incident_common/setup_droplet.py --deploy-bad\n"
