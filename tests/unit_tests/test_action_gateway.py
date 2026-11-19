@@ -238,7 +238,7 @@ def test_connect_cancel_and_a_link_still_unopened(gateway: ActionGateway, fake: 
 
 
 API = "https://api.digitalocean.com/v2/action-gateway"
-MCP_URL = "https://actions.do-ai-test.run/mcp/endpoint/abc"
+MCP_URL = "https://sfo3.actions.do-ai.run/mcp/endpoint/abc"
 
 
 def _client(handler, *, data_url: str | None = None) -> ActionGatewayClient:
@@ -276,7 +276,7 @@ def test_client_speaks_the_endpoint_protocol_on_the_data_plane_its_mcp_url_names
     assert json.loads(seen[0].content) == {"name": "microvm-ag-1", "version": {"tools": ["t@1"], "actor_id": "u",
                                            "policy": ActionPolicy(allow=["t"]).to_spec()}}
     assert client.invoke("abc", "t", {"a": 1}, "why") == {"status": "success", "output": {"ok": 1}}
-    assert seen[1].url.host == "actions.do-ai-test.run"  # the origin of the returned mcp_url
+    assert seen[1].url.host == "sfo3.actions.do-ai.run"  # the origin of the returned mcp_url
     assert seen[1].headers["X-Endpoint-Id"] == "abc" and seen[1].headers["Authorization"] == "Bearer tok"
     assert "X-Session-Id" not in seen[1].headers
     assert json.loads(seen[1].content) == {"rationale": "why", "tools": [{"tool": "t", "arguments": {"a": 1}}]}
@@ -309,7 +309,7 @@ def test_an_endpoint_it_did_not_create_is_looked_up_and_data_url_overrides(monke
 
 
 @pytest.mark.parametrize("url", ["http://actions.do-ai.run/mcp/endpoint/abc", "https://actions.example.com/mcp/endpoint/abc",
-                                 "https://do-ai.run.example.com/mcp"])
+                                 "https://do-ai.run.example.com/mcp", "https://actions.example.run/mcp/endpoint/abc"])
 def test_an_mcp_url_off_the_gateway_domains_is_refused_and_the_endpoint_deleted(monkeypatch, url: str):
     seen: list[httpx.Request] = []
 
@@ -323,6 +323,22 @@ def test_an_mcp_url_off_the_gateway_domains_is_refused_and_the_endpoint_deleted(
     with pytest.raises(ActionGatewayError, match="outside"):
         _client(handler).create_endpoint("microvm-ag-1", ["t@1"], {}, None)
     assert (seen[-1].method, seen[-1].url.path) == ("DELETE", "/v2/action-gateway/endpoints/abc")
+
+
+def test_data_url_takes_every_call_and_the_mcp_url_is_not_checked(monkeypatch):
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.method == "POST" and request.url.path == "/v2/action-gateway/endpoints":
+            return httpx.Response(201, json={"endpoint": {"id": "abc"}, "mcp_url": "https://actions.example.com/mcp"})
+        return httpx.Response(200, json={"results": [{"result": {"status": "success", "output": "ok"}}]})
+
+    monkeypatch.delenv("DO_ACTION_GATEWAY_DATA_URL", raising=False)
+    client = _client(handler, data_url="https://gateway.example.org")
+    assert client.create_endpoint("microvm-ag-1", ["t"], {}, None) == "abc"  # not refused: data_url decides
+    client.invoke("abc", "t", {}, "why")
+    assert seen[-1].url.host == "gateway.example.org"
 
 
 def test_ask_on_an_unconnected_action_approves_then_connects_then_runs(fake: LocalActionGatewayClient):

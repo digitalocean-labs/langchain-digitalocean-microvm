@@ -49,7 +49,7 @@ from langchain_digitalocean_microvm.config import TRANSPORT_ENV, env_value
 API_URL = "https://api.digitalocean.com/v2/action-gateway"
 DATA_URL = "https://actions.do-ai.run"
 # The data plane is the origin of the endpoint's returned `mcp_url`, accepted only on these domains.
-DATA_DOMAINS = ("do-ai.run", "do-ai-test.run")
+DATA_DOMAINS = ("do-ai.run",)
 ENDPOINT_PREFIX = "microvm-ag-"
 DEFAULT_RATIONALE = "Requested by the agent"
 CONNECT_LINK = re.compile(r"https://cloud\.digitalocean\.com/security/connectlinks/confirm[^\s\"'<>)\\]*")
@@ -196,7 +196,8 @@ class ActionGatewayClient:
     """REST client: endpoints on the control plane, tools and approvals on each endpoint's data plane.
 
     The data plane of an endpoint is the origin of the `mcp_url` the service returns for it (an `https` host on
-    one of `DATA_DOMAINS`). `data_url` (default `DO_ACTION_GATEWAY_DATA_URL`) sends every endpoint to one host instead.
+    one of `DATA_DOMAINS`). `data_url` (default `DO_ACTION_GATEWAY_DATA_URL`) sends every endpoint to that one host
+    instead; the `mcp_url` is then not used, and not checked.
     """
 
     def __init__(
@@ -230,6 +231,8 @@ class ActionGatewayClient:
             return {}
 
     def _remember(self, endpoint: Mapping[str, Any], mcp_url: Any = None) -> None:
+        if self._data_url is not None:  # every call goes to data_url
+            return
         url = mcp_url or endpoint.get("mcp_url") or (endpoint.get("head_version") or {}).get("mcp_url")
         if isinstance(url, str) and url:
             origin = _data_origin(url)
