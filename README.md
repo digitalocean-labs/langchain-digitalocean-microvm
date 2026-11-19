@@ -35,9 +35,22 @@ export DO_MODEL_ACCESS_KEY=...                             # or EXAMPLES_MODEL p
 DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py   # a deep agent in a local directory
 ```
 
-`uv run examples/tour.py` runs example 11 with its live dashboard in local mode in a temporary directory (about 2 minutes; on macOS the
-dashboard opens in a window of its own, `--same-terminal` keeps it in this terminal; `--full` adds 01, 03, 06 and 10). `uv run python scripts/check_setup.py` says, per example, what your `.env` is missing (read-only; `--offline` checks
-the variables only, `--deep` also creates, uses and deletes one throwaway MicroVM); `uv run python scripts/setup_examples.py` sets up what is missing.
+The tour runs example 11 with its live dashboard in local mode in a temporary directory (about 2 minutes; on macOS the
+dashboard opens in a window of its own):
+
+```bash
+uv run examples/tour.py
+uv run examples/tour.py --same-terminal   # keep the dashboard in this terminal
+uv run examples/tour.py --full            # adds 01, 03, 06 and 10
+```
+
+For real MicroVMs, check what your `.env` is missing, per example (read-only), then set up what is missing:
+
+```bash
+uv run python scripts/check_setup.py             # --offline checks the variables only
+uv run python scripts/check_setup.py --deep      # also creates, uses and deletes one throwaway MicroVM
+uv run python scripts/setup_examples.py          # sets up what is missing (--dry-run checks only)
+```
 
 In local mode the agent's shell
 commands run on your machine, so use a scratch checkout and read what an example does before you run it.

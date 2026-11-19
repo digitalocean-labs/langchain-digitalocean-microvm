@@ -19,8 +19,14 @@ place.
 ## Run
 
 From the repository root, with a model configured (see [`../README.md`](../README.md))
-and `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` + `DO_MICROVM_IMAGE` (`uv run python scripts/setup_examples.py` sets them up
-step by step; `--dry-run` only checks):
+and `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` + `DO_MICROVM_IMAGE`. To set them up step by step:
+
+```bash
+uv run python scripts/setup_examples.py
+uv run python scripts/setup_examples.py --dry-run   # checks only
+```
+
+Then:
 
 ```bash
 uv run examples/05_data_analyst/analyst.py                  # chained questions + donut chart

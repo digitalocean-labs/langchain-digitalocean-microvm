@@ -162,8 +162,14 @@ resumed on the next `update`; finished results are served from the store, so a
 
 ## Real MicroVMs (`DO_MICROVM_HOST_MODE=microvm`)
 
-`uv run python scripts/setup_examples.py --examples 04` sets up what follows step by step: the tokens, the model key,
-`DO_MICROVM_HOST_MODE=microvm` and the agent-host image (rebuilt when its sources changed). `--dry-run` only checks.
+Set up what follows step by step: the tokens, the model key, `DO_MICROVM_HOST_MODE=microvm` and the agent-host image
+(rebuilt when its sources changed):
+
+```bash
+uv run python scripts/setup_examples.py --examples 04
+uv run python scripts/setup_examples.py --examples 04 --dry-run   # checks only
+```
+
 By hand:
 
 ```bash
