@@ -6,6 +6,10 @@
 
 - Action Gateway tools use endpoints instead of sessions: `ActionGateway` creates an endpoint with its tools and policy (`POST /v2/action-gateway/endpoints`) and calls it with `X-Endpoint-Id` on the data plane the endpoint's `mcp_url` names (only `https` hosts on `do-ai.run` / `do-ai-test.run`; `DO_ACTION_GATEWAY_DATA_URL` or `data_url=` overrides). Renamed: `session_prefix=` to `endpoint_prefix=`, `session_id` to `endpoint_id`, `SESSION_PREFIX` to `ENDPOINT_PREFIX`, `ActionGatewayClient.list_sessions` / `delete_session` to `list_endpoints` / `delete_endpoint`, and `GatewayClient.create_session` / `delete_session` to `create_endpoint` / `delete_endpoint` (custom clients must rename them). `LocalActionGatewayClient` follows.
 
+**Added**
+
+- `scripts/setup_example_09.py`: sets up example 09's real mode step by step. It lists the commands it needs, asks for each token that is missing or refused (input hidden), checks it and writes it to `.env` (mode 0600); DigitalOcean tokens with scopes the setup does not need (Full Access, Read Only, extra scopes) are refused. It then builds the sandbox image, creates the public demo repository with `gh`, and runs `setup_droplet.py`, `prepare.py --clean` and `check_setup.py --examples 09`. `--dry-run` runs only read-only checks of what is set (tokens, team limit, image manifest, repository, droplet health) and exits 0 when they pass.
+
 **Changed**
 
 - `setup_droplet.py --deploy-bad` and `--verify-restore` exit with a message to run the setup first when its state file is missing. The example 12 README lists the setup step before `--deploy-bad`; the READMEs of examples 09, 10 and 11 say the first run builds the template when `prepare.py` was not run.
