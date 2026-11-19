@@ -76,10 +76,11 @@ your first message (`LazyGateway` in `agent.py`), and the server log prints
 5. **List.** *"List all tasks."* Terminal statuses come from the supervisor's
    state; a running task is asked live.
 6. **Kill a host.** Start one more long task (*"Start an echo task that takes
-   two minutes saying 'gone'"*), then remove its host. From another terminal the
+   two minutes saying 'gone'"*), then remove its host. The
    host process is the one whose config path carries the task id:
 
    ```bash
+   # in a second terminal run:
    pkill -f "microvm_agent_local/<task id>"
    ```
 

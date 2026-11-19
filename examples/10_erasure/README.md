@@ -38,7 +38,7 @@ accounts are needed; only the MicroVMs have a real mode.
 ## How it works
 
 ```
- you ── run_script.py (console: streams the run, asks you to approve each erasure)     dashboard.py (second terminal)
+ you ── run_script.py (console: streams the run, asks you to approve each erasure)     dashboard.py (a terminal of its own)
           │
  erasure-coordinator (no shell) ────────────────── Action Gateway: allow / ask / deny
           │   task ×4, in parallel
@@ -112,12 +112,16 @@ this example does not do that. Only the MicroVMs have a real mode.
 ## Run (local mode, no account)
 
 ```bash
-uv sync --all-extras          # from the repository root
+# in terminal #1 run, from the repository root (pre-flight, then the live dashboard):
+uv sync --all-extras
 export DO_MICROVM_TRANSPORT=local
-uv run examples/10_erasure/prepare.py --clean      # pre-flight
-uv run examples/10_erasure/dashboard.py            # terminal 2
-uv run examples/10_erasure/run_script.py           # terminal 1: the request, five approval prompts, the follow-up, the report
-uv run examples/10_erasure/run_script.py --approve --deny-system marketing   # no prompts: all approved but the email-marketing erasure
+uv run examples/10_erasure/prepare.py --clean
+uv run examples/10_erasure/dashboard.py
+
+# in terminal #2 run (the request, five approval prompts, the follow-up, the report):
+export DO_MICROVM_TRANSPORT=local
+uv run examples/10_erasure/run_script.py
+uv run examples/10_erasure/run_script.py --approve --deny-system marketing   # or: no prompts, all approved but the email-marketing erasure
 ```
 
 In local mode the MicroVMs are local directories (the agent's commands then run on this machine). `dashboard.py` shows what happens from the moment it starts (`--replay` reads the
@@ -138,9 +142,12 @@ uv run python scripts/setup_examples.py --dry-run   # checks only
 Then:
 
 ```bash
+# in terminal #1 run (pre-flight, then the live dashboard; it also polls the MicroVMs' status from the API):
 uv run examples/10_erasure/prepare.py --clean
-uv run examples/10_erasure/dashboard.py               # terminal 2: also polls the MicroVMs' status from the API
-uv run examples/10_erasure/run_script.py --delete     # deletes the thread's four MicroVMs at the end
+uv run examples/10_erasure/dashboard.py
+
+# in terminal #2 run (deletes the thread's four MicroVMs at the end):
+uv run examples/10_erasure/run_script.py --delete
 ```
 
 The template's checkpoint is kept for the next run (it does not count against the team limit). `delete_all.py`

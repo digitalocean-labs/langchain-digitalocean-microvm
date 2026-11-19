@@ -217,6 +217,7 @@ and set `DO_INCIDENT_HOST_IMAGE` and `DO_INCIDENT_SPECIALISTS_IMAGE` to the refe
 enough, for example a Cloudflare quick tunnel (no account; the URL changes each time):
 
 ```bash
+# in terminal #1 run (keep it running during the demo):
 cloudflared tunnel --url http://127.0.0.1:8788        # prints https://<random>.trycloudflare.com
 ```
 
@@ -229,10 +230,15 @@ A real run needs the incident's Droplet first: run the setup once (droplet, serv
 `--deploy-bad` and `--verify-restore` read the state file it writes.
 
 ```bash
+# in terminal #2 run (the tunnel stays up in terminal #1):
 uv run examples/incident_common/setup_droplet.py                              # one-off setup, a couple of minutes
 uv run examples/incident_common/setup_droplet.py --deploy-bad                 # the failure starts
 uv run examples/12_incident_response_agents/console.py demo --web --delete       # or --approve: no human
-uv run examples/12_incident_response_agents/relay.py serve                    # or a relay for other approvers (DO_INCIDENT_OPERATOR_TOKEN, DO_INCIDENT_RELAY_SECRET)
+
+# or, in terminal #2, a relay for other approvers (DO_INCIDENT_OPERATOR_TOKEN, DO_INCIDENT_RELAY_SECRET):
+uv run examples/12_incident_response_agents/relay.py serve
+
+# when the run is over, in terminal #2:
 uv run examples/incident_common/setup_droplet.py --cleanup
 ```
 
