@@ -30,13 +30,15 @@ const MAX_STREAMS = 4;  // a browser opens about 6 connections to one site: the 
 const SOON_MS = 5 * 60 * 1000;  // the last minutes before an approval expires are shown in amber
 
 const state = { token: "", selected: "", opened: "", list: [], incidents: new Map(), pendingKey: null, busy: false,
+                deciding: new Set(),  // approval ids whose decision is in flight
                 health: undefined, streams: new Set(), view: "incident", tab: "story", headlineOpen: false, policy: null,
                 openEvents: new Set() };
 
 function incidentState(incident) {  // what this tab has read of one incident
   if (!state.incidents.has(incident)) {
     state.incidents.set(incident, { seen: undefined, detail: null, logNext: 0, audit: [], activity: [], world: null,
-                                    streamed: "", logTimer: 0, story: null, reportShown: false });
+                                    streamed: "", logTimer: 0, story: null, reportShown: false,
+                                    logBusy: false, logAgain: false, auditKeys: new Set() });
   }
   return state.incidents.get(incident);
 }
@@ -187,14 +189,25 @@ async function refreshDetail(incident) {
 async function refreshLog(incident) {
   if (!state.token || !incident) return;
   const mine = incidentState(incident);
-  for (let page = 0; page < 20; page += 1) {
-    const response = await api(`incidents/${encodeURIComponent(incident)}/log?after=${mine.logNext}`);
-    if (!response.ok || !state.incidents.has(incident)) return;
-    const { events, next } = await response.json();
-    events.forEach((event) => applyEvent(mine, event));
-    const more = next > mine.logNext && events.length >= 500;
-    mine.logNext = next;
-    if (!more) break;
+  // One read at a time: overlapping reads would each start at the same offset and add the same events. A read asked for
+  // meanwhile is made by the one in flight, once it is done.
+  if (mine.logBusy) { mine.logAgain = true; return; }
+  mine.logBusy = true;
+  try {
+    do {
+      mine.logAgain = false;
+      for (let page = 0; page < 20; page += 1) {
+        const response = await api(`incidents/${encodeURIComponent(incident)}/log?after=${mine.logNext}`);
+        if (!response.ok || !state.incidents.has(incident)) return;
+        const { events, next } = await response.json();
+        events.forEach((event) => applyEvent(mine, event));
+        const more = next > mine.logNext && events.length >= 500;
+        mine.logNext = next;
+        if (!more) break;
+      }
+    } while (mine.logAgain);
+  } finally {
+    mine.logBusy = false;
   }
   render();
 }
@@ -202,6 +215,9 @@ async function refreshLog(incident) {
 function applyEvent(mine, event) {
   if (event.event === "world") { mine.world = event; return; }
   if (event.event === "gateway" || event.event === "decision") {
+    const key = JSON.stringify([event.ts, event.event, event.tool, event.status || event.decision]);
+    if (mine.auditKeys.has(key)) return;  // a log line already read
+    mine.auditKeys.add(key);
     mine.audit.push({ ts: event.ts, kind: event.event, tone: event.event === "decision" ? event.decision : event.status,
                       tool: event.tool, error: event.error || "" });
     mine.audit = mine.audit.slice(-200);
@@ -773,6 +789,7 @@ function renderApprovals(pending) {
       const button = el("button", label, style);
       button.type = "button";
       if (decision === "approve" && (stop.problems || []).length) button.disabled = true;  // the relay would refuse it
+      if (state.deciding.has(stop.id)) button.disabled = true;  // a decision on it is in flight
       button.addEventListener("click", () => decide(stop.id, decision, card));
       actions.append(button);
     }
@@ -785,6 +802,8 @@ async function decide(interruptId, decision, card) {
   state.busy = true;
   card.querySelectorAll("button").forEach((button) => { button.disabled = true; });
   const reason = card.querySelector(".reason").value.trim();
+  let taken = false;
+  state.deciding.add(interruptId);  // a redraw of the approvals keeps its buttons disabled until the outcome is known
   try {
     const response = await api(`incidents/${encodeURIComponent(incident)}/decision`, {
       method: "POST", body: JSON.stringify({ interrupt_id: interruptId, decision, ...(reason ? { reason } : {}) }),
@@ -792,6 +811,7 @@ async function decide(interruptId, decision, card) {
     if (response.status === 409) banner("Already decided (by you or another approver), or the thread moved on.");
     else if (!response.ok) banner(`The decision was not taken: ${response.status} ${await response.text()}`);
     else {
+      taken = true;
       banner(`${decision}: sent. The specialist that asked continues in its agent host.`);
       state.tab = "story";
       stream(incident, (await response.json()).run_id);
@@ -799,7 +819,9 @@ async function decide(interruptId, decision, card) {
   } finally {
     state.busy = false;
     state.pendingKey = null;
+    if (!taken) state.deciding.delete(interruptId);  // refused or failed: it can be decided again
     await refreshDetail(incident).catch((error) => banner(error.message));
+    state.deciding.delete(interruptId);  // taken: the detail just read no longer lists it
   }
 }
 
