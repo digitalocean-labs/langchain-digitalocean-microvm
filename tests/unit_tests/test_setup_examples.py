@@ -85,12 +85,11 @@ def test_plan_per_example() -> None:
     assert setup.Plan.of(("02",)).dcode and setup.Plan.of(("09", "07")).incident
 
 
-@pytest.mark.parametrize(("value", "error"), [("04", "README"), ("04,09", "agent-host image"), ("13", "no example 13")])
-def test_examples_with_their_own_setup_or_unknown_are_refused(value: str, error: str,
-                                                             capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.mark.parametrize("value", ["13", "4,13"])
+def test_unknown_examples_are_refused(value: str, capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         setup.main(["--dry-run", "--examples", value])
-    assert error in capsys.readouterr().err
+    assert "no example 13" in capsys.readouterr().err
 
 
 def test_examples_parsed_once_each() -> None:
@@ -238,9 +237,44 @@ def test_dry_run_ready_when_everything_checks(api: dict[tuple[str, str], int], t
     assert "recreate the droplet" in capsys.readouterr().out
 
 
+def test_plan_for_04() -> None:
+    plan = setup.Plan.of(("04",))
+    assert (plan.hosts, plan.agents, plan.incident, plan.gateway, plan.image) == (True, False, False, False, False)
+    assert plan.hosts_label == "04" and setup.Plan.of(("04", "12")).hosts_label == "04, 12"
+
+
+@pytest.mark.parametrize(("examples", "keys"), [
+    (("04",), ["DO_MICROVM_AGENT_IMAGE"]),
+    (("12",), ["DO_INCIDENT_HOST_IMAGE", "DO_INCIDENT_SPECIALISTS_IMAGE"]),
+    (("04", "12"), ["DO_MICROVM_AGENT_IMAGE", "DO_INCIDENT_HOST_IMAGE", "DO_INCIDENT_SPECIALISTS_IMAGE"]),
+])
+def test_host_images_per_example(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, examples: tuple[str, ...],
+                                 keys: list[str]) -> None:
+    checked: list[str] = []
+    monkeypatch.setattr(setup.Setup, "host_image", lambda self, key, what, spec, name: checked.append(key) or True)
+    env_file = tmp_path / ".env"
+    env_file.write_text("")
+    assert setup.Setup(env_file, setup.Plan.of(examples), dry_run=True).host_images() is True
+    assert checked == keys
+
+
+def test_default_agent_host_is_built_without_a_spec(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+
+    class Done:
+        returncode, stdout, stderr = 0, "layer: 1 MiB, content hash 5ba6f91221c5\n", ""
+
+    monkeypatch.setattr(setup.shutil, "which", lambda command: f"/bin/{command}")
+    monkeypatch.setattr(setup.subprocess, "run", lambda command, **_: seen.append(command) or Done())
+    assert setup.content_hash(None) == "5ba6f91221c5"
+    assert "--spec" not in seen[0]
+    assert setup.content_hash(setup.HOST_IMAGES[0][2]) == "5ba6f91221c5"
+    assert "--spec" in seen[1]
+
+
 def test_plan_for_12() -> None:
     plan = setup.Plan.of(("12",))
-    assert (plan.incident, plan.agents, plan.gateway, plan.image) == (True, True, True, False)
+    assert (plan.incident, plan.hosts, plan.agents, plan.gateway, plan.image) == (True, True, True, True, False)
     assert plan.incident_label == "12" and setup.Plan.of(("09", "12")).incident_label == "09, 12"
     assert not setup.Plan.of(("09",)).agents
 
