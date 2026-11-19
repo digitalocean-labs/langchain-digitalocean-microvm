@@ -13,6 +13,10 @@
 - `scripts/smoke_action_gateway.py --slug-version` is optional (default: no pin).
 - `scripts/grep_gate.sh` reads extra patterns from an untracked `.grep_gate_extra` (or `GREP_GATE_EXTRA`) and checks them in addition to its built-in ones.
 
+**Fixed**
+
+- Example 12 approvals page: one log read per incident at a time, and a gateway or decision row already shown is not added again. An approval whose decision is in flight keeps its buttons disabled through redraws; they are enabled again only when the decision was refused or failed.
+
 ## 0.1.0
 
 First release. Supports `deepagents>=0.7.0,<0.8.0`.
