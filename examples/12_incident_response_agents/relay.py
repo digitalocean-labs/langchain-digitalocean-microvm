@@ -80,6 +80,7 @@ import secrets
 import sys
 import threading
 import time
+import traceback
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
@@ -668,7 +669,9 @@ class Broker:
         try:
             text = gateway.call(tool, arguments, rationale)
         except RuntimeError as exc:  # the gateway wanted a decision or a connection: an interrupt, outside a graph here
-            log_event(event="broker", incident=incident, role=role, tool=tool, status="error", error=str(exc)[:300])
+            frames = [f"{Path(f.filename).name}:{f.lineno} {f.name}" for f in traceback.extract_tb(exc.__traceback__)[-4:]]
+            log_event(event="broker", incident=incident, role=role, tool=tool, status="error", arguments=arguments,
+                      error=f"{type(exc).__name__}: {str(exc)[:300]}", frames=frames)
             raise BrokerRefused(502, f"{tool} needs the relay's gateway actor to connect an account first") from exc
         status = "error" if text.startswith("Error:") else "allow"
         log_event(event="broker", incident=incident, role=role, tool=tool, status=status, arguments=arguments,
@@ -1075,9 +1078,15 @@ class Relay:
             return True
         # Nothing is open, but a specialist's host that just finished still reads "running" until its MicroVM pauses (a
         # minute after the run): read on, so the page shows the pause, not the last state seen, for a bounded time.
+        shown = {role: {"status": t["status"], "since": t["since"]} for role, t in tiles.items()}
         if any(t["status"] in ("running", "creating", "resuming") for t in tiles.values()):
-            return now - self._settling.setdefault(incident, now) < SETTLE_SECONDS
-        self._settling.pop(incident, None)
+            began = self._settling.setdefault(incident, now)
+            if now - began < SETTLE_SECONDS:
+                return True
+            log_event(event="relay", incident=incident, settle="limit", seconds=round(now - began, 1), tiles=shown)
+            return False
+        if (began := self._settling.pop(incident, None)) is not None:
+            log_event(event="relay", incident=incident, settle="paused", seconds=round(now - began, 1), tiles=shown)
         return False
 
     # -- approvers --------------------------------------------------------------------------------
