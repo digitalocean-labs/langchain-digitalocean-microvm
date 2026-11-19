@@ -7,7 +7,7 @@
 
 Everything goes through an Action Gateway endpoint of its own (DO_ACTION_GATEWAY_TOKEN, DO_ACTION_GATEWAY_ACTOR_ID, the
 actor's DigitalOcean connection), so the droplet is created in the account that connection belongs to: the droplet
-`incident-svc` (s-1vcpu-1gb in sfo2 unless DO_INCIDENT_SIZE, DO_INCIDENT_REGION), the snapshot `incident-good`, the ssh key `incident-key` (a temporary key pair kept
+`checkout-svc` (s-1vcpu-1gb in sfo2 unless DO_INCIDENT_SIZE, DO_INCIDENT_REGION), the snapshot `checkout-svc-snapshot`, the ssh key `incident-key` (a temporary key pair kept
 under outputs/). The gateway's `droplet-create` has no first-boot script, so the service is installed over ssh: the droplet
 clones DO_INCIDENT_REPO (`owner/name`, a public repository you own, built with service/make_demo_repo.sh: two commits, the
 newest is the bad deploy) and runs service/app.py from it. A deploy is a `git checkout` of a commit and a restart, and the
@@ -47,7 +47,7 @@ from langchain_digitalocean_microvm.integrations.action_gateway import (
     ActionPolicy,
 )
 
-DROPLET, SNAPSHOT, SSH_KEY = "incident-svc", "incident-good", "incident-key"
+DROPLET, SNAPSHOT, SSH_KEY = "checkout-svc", "checkout-svc-snapshot", "incident-key"
 IMAGE = "ubuntu-24-04-x64"
 SIZE = os.environ.get("DO_INCIDENT_SIZE", "s-1vcpu-1gb")
 REGION = os.environ.get("DO_INCIDENT_REGION", "sfo2")  # another region when the size is not available in this one

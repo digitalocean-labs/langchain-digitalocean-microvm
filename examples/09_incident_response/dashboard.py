@@ -51,7 +51,7 @@ from langchain_digitalocean_microvm.client import (
 from langchain_digitalocean_microvm.provider import TEMPLATE_PREFIX
 
 EVENTS = OUTPUTS / "events.jsonl"
-DROPLET_NAME = "incident-svc"  # incident_common's name for it (world.py, setup_droplet.py)
+DROPLET_NAME = "checkout-svc"  # incident_common's name for it (world.py, setup_droplet.py)
 # agent.py's SUBAGENTS, in display order (not imported: that would build the models), and what each is called on screen
 ROLES = ["metrics", "changes", "infra", "verifier"]
 ROLE_NAMES = {"metrics": "Metrics Analyst", "changes": "Change Analyst", "infra": "Infra Analyst", "verifier": "Recovery Validator"}

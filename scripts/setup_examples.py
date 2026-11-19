@@ -667,7 +667,7 @@ class Setup:
     def droplet(self) -> bool:
         self.heading(f"Droplet and connections ({self.plan.incident_label})")
         if DROPLET_STATE.exists():
-            if not self.verdict("droplet incident-svc", verify_droplet(),
+            if not self.verdict("droplet checkout-svc", verify_droplet(),
                                 "recreate the droplet: setup_droplet.py --cleanup, then this script"):
                 return False
             repo = dotenv_values(DROPLET_ENV).get("DO_INCIDENT_REPO")
@@ -683,7 +683,7 @@ class Setup:
             self.todo.append("create the droplet (setup_droplet.py; this script runs it, with the connect links)")
             return False
         else:
-            print("       creates droplet incident-svc, ssh key incident-key and snapshot incident-good (billed until "
+            print("       creates droplet checkout-svc, ssh key incident-key and snapshot checkout-svc-snapshot (billed until "
                   "setup_droplet.py --cleanup)")
             if not self.confirm("       create them now?") or not _step("examples/incident_common/setup_droplet.py"):
                 return False

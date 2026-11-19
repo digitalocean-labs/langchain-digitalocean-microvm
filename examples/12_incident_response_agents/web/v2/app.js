@@ -730,7 +730,7 @@ function showSameElsewhere(card, others) {
 }
 
 function named(facts, label) {
-  // The name in a fact the relay read ("droplet    dhr-incident-svc (active)"); null when it is not there or not found.
+  // The name in a fact the relay read ("droplet    dhr-checkout-svc (active)"); null when it is not there or not found.
   const line = (facts || []).find((fact) => fact.startsWith(label));
   if (!line || /NOT FOUND/.test(line)) return null;
   const match = line.slice(label.length).trim().match(/^([^\s,(]+)/);
