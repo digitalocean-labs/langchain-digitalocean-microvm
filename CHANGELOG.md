@@ -8,7 +8,7 @@
 
 **Changed**
 
-- `setup_droplet.py --deploy-bad` and `--verify-restore` exit with a message to run the setup first when its state file is missing. The example 12 README lists the setup step before `--deploy-bad`.
+- `setup_droplet.py --deploy-bad` and `--verify-restore` exit with a message to run the setup first when its state file is missing. The example 12 README lists the setup step before `--deploy-bad`; the READMEs of examples 09, 10 and 11 say the first run builds the template when `prepare.py` was not run.
 - Tool slugs need no version: a slug without `@version` gets the released one. The examples' policies and tool lists no longer pin versions; `name@version` still pins one.
 - `scripts/check_setup.py --deep` calls one read-only action through a throwaway `microvm-ag-check-*` endpoint and deletes it.
 - `scripts/smoke_action_gateway.py --slug-version` is optional (default: no pin).

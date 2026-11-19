@@ -191,7 +191,7 @@ coordinator calls `save_report`; a refusal in a later turn (the follow-up) is in
 Coordinator on `anthropic-claude-4.6-sonnet`, locators on `anthropic-claude-haiku-4.5`; `run_script.py --approve --delete`
 answers the approvals itself, so there is no waiting for a human.
 
-- **One-off setup:** `prepare.py` builds the template once.
+- **One-off setup:** the template is built once, by `prepare.py` or by the first run if `prepare.py` was not run (the first run then takes longer).
 - **The locators** each get a MicroVM cloned from the template (in parallel) and are paused when done; this is the first
   phase of the run.
 - **The rest is the coordinator's work:** five approvals, verification and the report. With real approvers the wait for
