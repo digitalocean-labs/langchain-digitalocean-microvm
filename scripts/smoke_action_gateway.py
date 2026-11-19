@@ -75,7 +75,7 @@ def drive(gateway: ActionGateway, tool: str, record: list[dict[str, Any]]) -> st
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--slug-version", default=None, help="pin the two slugs to this version (default: no pin, the released one)")
+    parser.add_argument("--slug-version", default=None, help="pin the two slugs to this version (default: no pin)")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="default: %(default)s")
     add_env_file_argument(parser)
     args = parser.parse_args()

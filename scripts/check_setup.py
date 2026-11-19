@@ -49,7 +49,7 @@ INFERENCE_URL = "https://inference.do-ai.run/v1/models"
 INFERENCE_CHAT_URL = "https://inference.do-ai.run/v1/chat/completions"
 STRONG_MODEL_EXAMPLES = {"07", "08", "09", "10", "11", "12"}  # the examples with an orchestrating (strong) model
 ACTION_GATEWAY_URL = "https://api.digitalocean.com/v2/action-gateway/tools"
-GATEWAY_CHECK_TOOL = "digitalocean_region-list"  # read-only; no version: the released one
+GATEWAY_CHECK_TOOL = "digitalocean_region-list"  # read-only; no version pinned
 
 # Where a provider's key lives, for EXAMPLES_MODEL ("anthropic:claude-haiku-4-5" -> ANTHROPIC_API_KEY).
 PROVIDER_KEYS = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "google_genai": "GOOGLE_API_KEY"}

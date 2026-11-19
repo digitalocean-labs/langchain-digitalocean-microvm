@@ -424,7 +424,7 @@ class ActionGateway:
     email before the `@` (up to 64 letters, digits, `.`, `_` and `-`), else your user UUID
     (each actor connects its account once, through a link the gateway returns).
 
-    `tools`: the endpoint's tool slugs (`exa_web_search`: the released version; `exa_web_search@14` pins one); default the
+    `tools`: the endpoint's tool slugs (`exa_web_search`, sent as it is; `exa_web_search@14` pins one); default the
     names in `policy.allow` and `policy.ask`, as written. `preload`: slugs to expose as direct tools, each with its own
     input schema, besides the two meta tools (`action_search` finds the endpoint's tools by what they do,
     `action_invoke` calls one by name).

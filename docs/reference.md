@@ -553,8 +553,8 @@ with ActionGateway(policy) as gateway:  # the endpoint's tools: the names in all
 - **Policy.** `ActionPolicy(allow=, ask=, deny=)` lists tool names without versions; everything else
   is denied. `action_search` and `action_invoke` are always allowed, as the endpoint's policy needs.
   `tools=` lists the endpoint's slugs, by default the names in `allow` and `ask`. A slug without a version
-  (`github_list_commits`) gets the released version; `name@version` pins one, and the endpoint is refused when the
-  catalog no longer releases it.
+  (`github_list_commits`) is sent as it is; `name@version` pins one. When the service refuses the endpoint (for example
+  over a pinned version), `ActionGateway` raises `ActionGatewayError` with its answer.
 - **Policy as a file.** `ActionPolicy.from_yaml(path)` (a path or an open text stream; a `str` is a path, never YAML text)
   and `ActionPolicy.from_mapping(dict)` build the same policy from data:
 

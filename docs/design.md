@@ -332,8 +332,9 @@ which creates the endpoint with its first version: tools, policy and actor; data
   accepts only `https` on `do-ai.run`, so a token is never sent to a host the answer names elsewhere; an endpoint it
   did not create is looked up (`GET /endpoints/{id}`) once. `DO_ACTION_GATEWAY_DATA_URL` sends every call to the host
   it names instead.
-- **Slugs need no version.** A tool without `@version` gets the catalog's released version, and the examples name
-  tools that way; a pinned `name@version` is refused when the catalog no longer releases it.
+- **Slugs need no version.** The client sends a tool without `@version` as it is, and the examples name tools that
+  way; `name@version` pins one. An endpoint the service refuses (for example over a pinned version) is not created, and
+  the examples' `prepare.py` reports the service's answer.
 
 - **Interrupts, not a callback.** `requires_approval` and a connect link both stop the tool with a
   LangGraph `interrupt`; the application resumes the graph. The decision is posted with the caller's
