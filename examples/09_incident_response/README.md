@@ -128,7 +128,7 @@ agent-chat-ui, see [Run with `langgraph dev`](#run-with-langgraph-dev-studio-age
 
 ## Run (real mode)
 
-`uv run python scripts/setup_example_09.py` sets up everything below step by step: it lists the commands it needs, asks for
+`uv run python scripts/setup_examples.py --examples 09` sets up everything below step by step: it lists the commands it needs, asks for
 each token (with the page and the scopes), checks it, writes `.env`, builds the image, creates the demo repository with `gh`
 and runs `setup_droplet.py` and `prepare.py`. `--dry-run` only checks what is set and creates nothing. The steps by hand:
 

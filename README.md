@@ -37,7 +37,7 @@ DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py   # a dee
 
 `uv run examples/tour.py` runs examples 01 and 10 in local mode in a temporary directory (about a minute and a half, a few model calls;
 `--full` adds 03 and 06). `uv run python scripts/check_setup.py` says, per example, what your `.env` is missing (read-only; `--offline` checks
-the variables only, `--deep` also creates, uses and deletes one throwaway MicroVM).
+the variables only, `--deep` also creates, uses and deletes one throwaway MicroVM); `uv run python scripts/setup_examples.py` sets up what is missing.
 
 In local mode the agent's shell
 commands run on your machine, so use a scratch checkout and read what an example does before you run it.

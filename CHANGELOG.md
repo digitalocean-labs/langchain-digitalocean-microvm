@@ -8,7 +8,7 @@
 
 **Added**
 
-- `scripts/setup_example_09.py`: sets up example 09's real mode step by step. It lists the commands it needs, asks for each token that is missing or refused (input hidden), checks it and writes it to `.env` (mode 0600); a DigitalOcean token with scopes the setup does not need (Full Access, Read Only, extra scopes) is reported, and a pasted one is saved only if you confirm. It then builds the sandbox image, creates the public demo repository with `gh`, and runs `setup_droplet.py`, `prepare.py --clean` and `check_setup.py --examples 09`. `--dry-run` runs only read-only checks of what is set (tokens, team limit, image manifest, repository, droplet health) and exits 0 when they pass.
+- `scripts/setup_examples.py [--examples 09,07]`: sets up what the selected examples need for a real run, step by step, and runs `check_setup.py` for them at the end. Without `--examples`, the common base: the MicroVMs control and access tokens, the model access key, the sandbox image and room on the team (examples 01, 03, 05, 06, 08, 10 and 11). Per example: 09 the Action Gateway token and actor, the public demo repository (`gh`), the droplet (`setup_droplet.py`) and `prepare.py --clean`; 02 the `dcode` CLI; 07 the optional Tavily key. It lists the commands it needs, asks for each token that is missing or refused (input hidden), checks it and writes it to `.env` (mode 0600); a DigitalOcean token with scopes the setup does not need (Full Access, Read Only, extra scopes) is reported, and a pasted one is saved only if you confirm. `--dry-run` runs only read-only checks of what is set (tokens, team limit, image manifest; for 09 the repository and the droplet's health) and exits 0 when they pass.
 
 **Changed**
 

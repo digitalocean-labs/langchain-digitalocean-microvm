@@ -1,4 +1,4 @@
-"""scripts/setup_example_09.py: the token checks, the .env writes and the dry run, without network."""
+"""scripts/setup_examples.py: the plan per example, the token checks, the .env writes and the dry run, without network."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-import setup_example_09 as setup  # noqa: E402
+import setup_examples as setup  # noqa: E402
 
 
 class _Response:
@@ -59,18 +59,51 @@ def test_control_and_gateway_checks(api: dict[tuple[str, str], int]) -> None:
     assert setup.check_gateway("control", {}) is not None
 
 
-def test_model_key_checks_both_models(api: dict[tuple[str, str], int], monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(("examples", "models"), [
+    (("01",), ["anthropic-claude-haiku-4.5"]),
+    (("01", "09"), ["anthropic-claude-haiku-4.5", "anthropic-claude-4.6-sonnet"]),
+    (setup.BASE, ["anthropic-claude-haiku-4.5", "anthropic-claude-4.6-sonnet"]),  # 08, 10, 11 use the strong model
+])
+def test_model_key_checks_each_model_the_examples_use(api: dict[tuple[str, str], int], monkeypatch: pytest.MonkeyPatch,
+                                                      examples: tuple[str, ...], models: list[str]) -> None:
     asked: list[str] = []
     monkeypatch.setattr(setup, "_model_probe", lambda key, model: asked.append(model))
-    assert setup.check_model_key("model", {}) is None
-    assert asked == list(setup.MODELS)
+    secret = next(s for s in setup.secrets_for(setup.Plan.of(examples), {}) if s.key == "DO_MODEL_ACCESS_KEY")
+    assert secret.check("model", {}) is None
+    assert asked == models
+
+
+def test_plan_per_example() -> None:
+    base = setup.Plan.of(setup.BASE)
+    assert (base.model, base.image, base.gateway, base.incident) == (True, True, False, False)
+    assert base.microvms == 7  # 08: six specialists and the template's builder
+    keys = lambda plan: [s.key for s in setup.secrets_for(plan, {})]  # noqa: E731
+    assert keys(base) == ["DO_MICROVM_API_TOKEN", "DO_MICROVM_ACCESS_TOKEN", "DO_MODEL_ACCESS_KEY"]
+    assert "DO_ACTION_GATEWAY_TOKEN" in keys(setup.Plan.of(("09",)))
+    assert "DO_MODEL_ACCESS_KEY" not in keys(setup.Plan.of(("02",)))  # dcode brings its own model
+    assert keys(setup.Plan.of(("07",)))[-1] == "TAVILY_API_KEY"
+    assert setup.Plan.of(("02",)).dcode and setup.Plan.of(("09", "07")).incident
+
+
+@pytest.mark.parametrize(("value", "error"), [("12", "README"), ("04,09", "agent-host image"), ("13", "no example 13")])
+def test_examples_with_their_own_setup_or_unknown_are_refused(value: str, error: str,
+                                                             capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        setup.main(["--dry-run", "--examples", value])
+    assert error in capsys.readouterr().err
+
+
+def test_examples_parsed_once_each() -> None:
+    import argparse
+    assert setup.parse_examples("9, 7,09", argparse.ArgumentParser()) == ("09", "07")
+    assert setup.parse_examples(None, argparse.ArgumentParser()) == setup.BASE
 
 
 def test_save_writes_env_private(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("# DO_MICROVM_IMAGE=\nOTHER=1\n")
     env_file.chmod(0o644)
-    s = setup.Setup(env_file, dry_run=False)
+    s = setup.Setup(env_file, setup.Plan.of(setup.BASE), dry_run=False)
     s.save("DO_MICROVM_IMAGE", "registry.example/img:1")
     s.save("OTHER", "2")
     text = env_file.read_text()
@@ -83,11 +116,15 @@ def test_dry_run_changes_nothing(api: dict[tuple[str, str], int], tmp_path: Path
     env_file = tmp_path / ".env"
     env_file.write_text("DO_MICROVM_API_TOKEN=control\nDO_MODEL_ACCESS_KEY=model\n")
     before = env_file.read_text()
-    assert setup.main(["--dry-run", "--env-file", str(env_file)]) == 1
+    assert setup.main(["--dry-run", "--examples", "09", "--env-file", str(env_file)]) == 1
     out = capsys.readouterr().out
     assert env_file.read_text() == before
     assert "DO_MICROVM_ACCESS_TOKEN" in out and "microvm:access only" in out
     assert "DO_ACTION_GATEWAY_TOKEN" in out and "To do:" in out
+    setup.main(["--dry-run", "--env-file", str(env_file)])  # the base: no gateway token, no 09 steps
+    out = capsys.readouterr().out
+    steps = [line for line in out.splitlines() if line.startswith("[")]  # not the shell note, which names variables
+    assert not any("DO_ACTION_GATEWAY_TOKEN" in line for line in steps) and "Demo repository" not in out
 
 
 @pytest.mark.parametrize("extra", ["/droplets", "/account"])
@@ -97,7 +134,7 @@ def test_broader_token_in_env_warned_not_failed(api: dict[tuple[str, str], int],
     api[(extra, "sekrit-control")] = 200  # Full Access, Read Only or an extra scope
     env_file = tmp_path / ".env"
     env_file.write_text("DO_MICROVM_API_TOKEN=sekrit-control\nDO_MODEL_ACCESS_KEY=model\n")
-    s = setup.Setup(env_file, dry_run=True)
+    s = setup.Setup(env_file, setup.Plan.of(setup.BASE), dry_run=True)
     s.tokens()
     out = capsys.readouterr().out
     assert "sekrit" not in out
@@ -113,9 +150,10 @@ def test_pasted_broader_token_saved_only_when_confirmed(api: dict[tuple[str, str
     pasted = iter(["full", ""])  # the broader token, then an empty answer (skip)
     monkeypatch.setattr(setup.getpass, "getpass", lambda prompt: next(pasted))
     monkeypatch.setattr("builtins.input", lambda prompt: keep)
-    monkeypatch.setattr(setup, "SECRETS", setup.SECRETS[:1])  # the control token only
+    monkeypatch.setattr(setup, "secrets_for", lambda plan, env: [setup.Secret(
+        "DO_MICROVM_API_TOKEN", "control", "", "", setup.check_control)])  # the control token only
     env_file = tmp_path / ".env"
-    s = setup.Setup(env_file, dry_run=False)
+    s = setup.Setup(env_file, setup.Plan.of(setup.BASE), dry_run=False)
     assert s.tokens() is saved
     assert (s.env.get("DO_MICROVM_API_TOKEN") == "full") is saved
 
@@ -127,9 +165,9 @@ def test_missing_tool_stops_before_any_prompt(api: dict[tuple[str, str], int], t
     monkeypatch.setattr(setup.Setup, "tokens", lambda self: pytest.fail("asked for tokens"))
     env_file = tmp_path / ".env"
     env_file.write_text("DO_MICROVM_IMAGE=img\n")
-    assert setup.main(["--env-file", str(env_file)]) == 1
+    assert setup.main(["--examples", "09", "--env-file", str(env_file)]) == 1
     out = capsys.readouterr().out
-    assert "[FAIL] gh: not on PATH" in out and "https://cli.github.com" in out
+    assert "[FAIL] gh: not found" in out and "https://cli.github.com" in out
     assert "crane" not in out.split("0. Prerequisites")[1]  # the image is set: crane is not needed
 
 
@@ -189,10 +227,12 @@ def test_dry_run_ready_when_everything_checks(api: dict[tuple[str, str], int], t
     env_file.write_text("DO_MICROVM_API_TOKEN=control\nDO_MICROVM_ACCESS_TOKEN=access\nDO_MODEL_ACCESS_KEY=model\n"
                         "DO_ACTION_GATEWAY_TOKEN=gw\nDO_ACTION_GATEWAY_ACTOR_ID=me\nDO_MICROVM_IMAGE=img\n"
                         "DO_INCIDENT_REPO=o/r\n")
-    assert setup.main(["--dry-run", "--env-file", str(env_file)]) == 0
+    assert setup.main(["--dry-run", "--examples", "09", "--env-file", str(env_file)]) == 0
     out = capsys.readouterr().out
     assert "Ready: every read-only check passed" in out
     assert "[--  ] DO_ACTION_GATEWAY_ACTOR_ID" in out and "prepare.py, full run" in out
+    assert setup.main(["--dry-run", "--env-file", str(env_file)]) == 0  # the base is ready too
+    capsys.readouterr()
     monkeypatch.setattr(setup, "verify_droplet", lambda: (False, "the service does not answer"))
-    assert setup.main(["--dry-run", "--env-file", str(env_file)]) == 1
+    assert setup.main(["--dry-run", "--examples", "09", "--env-file", str(env_file)]) == 1
     assert "recreate the droplet" in capsys.readouterr().out

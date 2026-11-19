@@ -1,39 +1,46 @@
-"""Set up everything example 09 (incident response) needs for a real run, step by step.
+"""Set up what the examples need for a real run, step by step; `--dry-run` checks it without creating anything.
 
-    uv run python scripts/setup_example_09.py [--dry-run] [--skip-repo] [--skip-droplet] [--refresh-repo]
+    uv run python scripts/setup_examples.py [--examples 09,07] [--dry-run] [--skip-repo] [--skip-droplet] [--refresh-repo]
+
+Without `--examples`, the common base: the MicroVMs control and access tokens, the model access key, the sandbox image
+and room on the team, which is what examples 01, 03, 05, 06, 08, 10 and 11 need. `--examples` adds each example's own
+steps (09: the Action Gateway token and actor, the demo repository, the droplet; 02: the `dcode` CLI; 07: the optional
+Tavily key); steps shared by several examples run once. Examples 04 and 12 are set up as their READMEs describe. The
+script is the write side of scripts/check_setup.py and reads the same per-example requirements.
 
 Each step checks first and changes something only when it is missing or refused, so the script can be run again. It
 starts with recommendations (a team or namespace of its own, token expiry, a spend threshold, the team limit, clean-up):
 
-0. Prerequisites: the commands the later steps run (git, bash, gh and its login, ssh, ssh-keygen, crane when the image
-   is built), each with where to get it. A missing one stops the script before it asks for anything.
-1. Tokens. DigitalOcean personal access tokens and model access keys are created in the Control Panel, so for each one
-   that is missing or refused the script names the page and the scopes, reads the value without echoing it, checks it
-   and writes it to `.env` (mode 0600). Checked: the control token lists MicroVMs; the access token cannot create
-   MicroVMs (checked with an empty create request, which creates nothing); the model key can call both
-   models example 09 uses; the Action Gateway token reads the tool catalog. A DigitalOcean token that can also read
-   droplets or the account (Full Access, Read Only, or extra custom scopes) is reported as broader than needed; a
-   pasted one is saved only if you confirm, one already in `.env` is kept with the warning. The control token then
-   reports the team's MicroVM limit against what a run holds.
-2. `DO_ACTION_GATEWAY_ACTOR_ID`, asked for when unset.
-3. `DO_MICROVM_IMAGE`: kept when set; otherwise built with scripts/build_sandbox_image.py into your DigitalOcean
-   Container Registry. The registry token is passed to the build in its environment and is written to `.env` only if
-   you say so.
-4. `DO_INCIDENT_REPO`: a public GitHub repository of your own (through the `gh` CLI and its login), filled with
-   examples/incident_common/service/make_demo_repo.sh. An existing repository is overwritten only after you type its
-   name; `--refresh-repo` rebuilds it (the change analyst reports the commit's age, so rebuild it shortly before a run).
-5. The droplet: examples/incident_common/setup_droplet.py, which shows the Action Gateway connect links (GitHub and
-   DigitalOcean) for the actor the first time; then examples/09_incident_response/prepare.py --clean and
-   scripts/check_setup.py --examples 09.
+- Prerequisites: the commands the selected steps run (for 09: git, bash, gh and its login, ssh, ssh-keygen; crane when
+  the image is built; for 02: dcode), each with where to get it. A missing one stops the script before it asks for
+  anything.
+- Tokens. DigitalOcean personal access tokens and model access keys are created in the Control Panel, so for each one
+  that is missing or refused the script names the page and the scopes, reads the value without echoing it, checks it
+  and writes it to `.env` (mode 0600). Checked: the control token lists MicroVMs; the access token cannot create
+  MicroVMs (checked with an empty create request, which creates nothing); the model key can call each model the
+  selected examples use; the Action Gateway token reads the tool catalog. A DigitalOcean token that can also read
+  droplets or the account (Full Access, Read Only, or extra custom scopes) is reported as broader than needed; a
+  pasted one is saved only if you confirm, one already in `.env` is kept with the warning. The control token then
+  reports the team's MicroVM limit against what each selected example holds.
+- `DO_MICROVM_IMAGE`: kept when set; otherwise built with scripts/build_sandbox_image.py into your DigitalOcean
+  Container Registry. The registry token is passed to the build in its environment and is written to `.env` only if
+  you say so.
+- 09: `DO_ACTION_GATEWAY_ACTOR_ID`, asked for when unset. `DO_INCIDENT_REPO`: a public GitHub repository of your own
+  (through the `gh` CLI and its login), filled with examples/incident_common/service/make_demo_repo.sh. An existing
+  repository is overwritten only after you type its name; `--refresh-repo` rebuilds it (the change analyst reports the
+  commit's age, so rebuild it shortly before a run). The droplet: examples/incident_common/setup_droplet.py, which shows
+  the Action Gateway connect links (GitHub and DigitalOcean) for the actor the first time; then
+  examples/09_incident_response/prepare.py --clean.
+- Last: scripts/check_setup.py for the selected examples.
 
 What is already set is checked, not only looked up: the image's manifest (crane; with DO_REGISTRY_TOKEN for a
 DigitalOcean registry), the repository (public, the demo's two commits and service/app.py), the droplet's service
 (`/health`). A full run treats a failed check as missing and offers to redo that step.
 
 `--dry-run` runs only the read-only checks, creates nothing (no MicroVM, endpoint, droplet or repository) and exits 0
-when everything it can check passes; it lists what only the full run checks (the actor, the template and a gateway
-endpoint with the example's tools, through prepare.py). Nothing secret is printed or passed on a command line.
-The full run requires a terminal (the values are typed in); step 0 lists the commands the other steps need.
+when everything it can check passes; it lists what only the full run checks (for 09: the actor, the template and a
+gateway endpoint with the example's tools, through prepare.py). Nothing secret is printed or passed on a command line.
+The full run requires a terminal (the values are typed in).
 """
 
 from __future__ import annotations
@@ -48,13 +55,19 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 from _env import DEFAULT_ENV_FILE, add_env_file_argument
-from check_setup import ACTION_GATEWAY_URL, _http_probe, _model_probe
+from check_setup import (
+    ACTION_GATEWAY_URL,
+    EXAMPLES,
+    _http_probe,
+    _model_probe,
+    _needed_models,
+)
 from dotenv import dotenv_values, set_key
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,22 +75,52 @@ API = "https://api.digitalocean.com/v2"
 TOKENS_PAGE = "https://cloud.digitalocean.com/account/api/tokens"
 MODEL_KEYS_PAGE = "https://cloud.digitalocean.com/model-studio/manage-keys"
 REGISTRY_PAGE = "https://cloud.digitalocean.com/registry"
-MODELS = ("anthropic-claude-haiku-4.5", "anthropic-claude-4.6-sonnet")
+TAVILY_PAGE = "https://app.tavily.com"
 DEMO_REPO_SCRIPT = ROOT / "examples" / "incident_common" / "service" / "make_demo_repo.sh"
 DROPLET_STATE = ROOT / "examples" / "incident_common" / "outputs" / "incident.json"
 DROPLET_ENV = DROPLET_STATE.with_name("incident.env")
 REPO_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._][A-Za-z0-9._-]*")  # never an option to gh or git
 
+BY_NUMBER = {example.number: example for example in EXAMPLES}
+BASE = ("01", "03", "05", "06", "08", "10", "11")  # the examples the common base covers
+OWN_SETUP = {"04": "the agent-host image and DO_MICROVM_HOST_MODE=microvm",
+             "12": "two agent-host images, DO_MICROVM_HOST_MODE=microvm and the broker URL"}
+
+
+@dataclass(frozen=True)
+class Plan:
+    """What the selected examples need, so each step runs once for all of them."""
+
+    examples: tuple[str, ...]
+    model: bool
+    image: bool
+    gateway: bool
+    incident: bool  # 09: the actor, the demo repository, the droplet and prepare.py
+    dcode: bool  # 02
+    tavily: bool  # 07, optional
+
+    @classmethod
+    def of(cls, numbers: Sequence[str]) -> Plan:
+        chosen = [BY_NUMBER[n] for n in numbers]
+        return cls(examples=tuple(numbers), model=any(e.model for e in chosen), image=any(e.image for e in chosen),
+                   gateway=any(e.gateway for e in chosen), incident="09" in numbers, dcode="02" in numbers,
+                   tavily="07" in numbers)
+
+    @property
+    def microvms(self) -> int:
+        return max(BY_NUMBER[n].microvms for n in self.examples)
+
 
 @dataclass(frozen=True)
 class Secret:
-    """A value created in the Control Panel: where, with which scopes, and how to check it."""
+    """A value created in a provider's console: where, with which scopes, and how to check it."""
 
     key: str
     what: str
     page: str
     scopes: str
     check: Callable[[str, Mapping[str, str]], str | None]  # None when the value works, else why not
+    optional: bool = False
 
 
 def _status(url: str, token: str) -> int | None:
@@ -103,49 +146,73 @@ def check_access(token: str, env: Mapping[str, str]) -> str | None:
         return "this token can create MicroVMs; create one with microvm:access only"
     if status == 401:
         return "401: the token was refused"
-    return None  # no create scope; its use on an endpoint is checked by prepare.py
+    return None  # no create scope; its use on an endpoint is checked when a sandbox is reached
 
 
-def check_model_key(key: str, env: Mapping[str, str]) -> str | None:
-    for model in (env.get("DO_INFERENCE_MODEL") or MODELS[0], env.get("DO_INFERENCE_STRONG_MODEL") or MODELS[1]):
-        if problem := _model_probe(key, model):
-            return f"{model}: {problem}"
-    return None
+def model_checker(models: Sequence[str]) -> Callable[[str, Mapping[str, str]], str | None]:
+    def check(key: str, env: Mapping[str, str]) -> str | None:
+        for model in models:
+            if problem := _model_probe(key, model):
+                return f"{model}: {problem}"
+        return None
+    return check
 
 
 def check_gateway(token: str, env: Mapping[str, str]) -> str | None:
     return _http_probe(ACTION_GATEWAY_URL, token, params={"per_page": "1"})
 
 
-SECRETS = (
-    Secret("DO_MICROVM_API_TOKEN", "MicroVMs control token", TOKENS_PAGE,
-           "Custom Scopes: microvm:create, microvm:read, microvm:update, microvm:delete", check_control),
-    Secret("DO_MICROVM_ACCESS_TOKEN", "MicroVM endpoint access token", TOKENS_PAGE,
-           "Custom Scopes: microvm:access only", check_access),
-    Secret("DO_MODEL_ACCESS_KEY", "Serverless Inference model access key", MODEL_KEYS_PAGE,
-           f"Foundation models: {' and '.join(MODELS)} (or All models)", check_model_key),
-    Secret("DO_ACTION_GATEWAY_TOKEN", "Action Gateway token", TOKENS_PAGE,
-           "Custom Scopes: every action_gateway scope", check_gateway),
-)
+def secrets_for(plan: Plan, env: Mapping[str, str]) -> list[Secret]:
+    """The tokens the plan needs, in the order they are asked for."""
+    secrets = [
+        Secret("DO_MICROVM_API_TOKEN", "MicroVMs control token", TOKENS_PAGE,
+               "Custom Scopes: microvm:create, microvm:read, microvm:update, microvm:delete", check_control),
+        Secret("DO_MICROVM_ACCESS_TOKEN", "MicroVM endpoint access token", TOKENS_PAGE,
+               "Custom Scopes: microvm:access only", check_access),
+    ]
+    if plan.model:
+        models = _needed_models(env, set(plan.examples))
+        secrets.append(Secret("DO_MODEL_ACCESS_KEY", "Serverless Inference model access key", MODEL_KEYS_PAGE,
+                              f"Foundation models: {' and '.join(models)} (or All models)", model_checker(models)))
+    if plan.gateway:
+        secrets.append(Secret("DO_ACTION_GATEWAY_TOKEN", "Action Gateway token", TOKENS_PAGE,
+                              "Custom Scopes: every action_gateway scope", check_gateway))
+    if plan.tavily:
+        secrets.append(Secret("TAVILY_API_KEY", "Tavily API key (07: web search for the newsletter agent)", TAVILY_PAGE,
+                              "optional: without it 07 runs without web search", lambda value, env: None, optional=True))
+    return secrets
+
+
 BROADER_CHECK = ("DO_MICROVM_API_TOKEN", "DO_MICROVM_ACCESS_TOKEN", "DO_ACTION_GATEWAY_TOKEN")
 BROADER_WARNING = ("accepted, and it can also read droplets or the account: it has more scopes than this setup needs "
                    "(Full Access, Read Only or extra custom scopes). Create it with only the scopes named to limit what "
                    "it can do")
 # Reads none of these tokens needs; a 200 on either means more scopes than the setup asks for (Full Access included).
 UNNEEDED_READS = (f"{API}/droplets", f"{API}/account")
-MICROVMS_NEEDED = 5  # what a run holds at once, the template's builder included (scripts/check_setup.py)
 
-RECOMMENDATIONS = f"""Before you start
-- Use a DigitalOcean team of its own for examples, or set DO_MICROVM_NAMESPACE (1-16 lowercase letters or digits),
-  so these MicroVMs, the droplet and the clean-up scripts stay apart from other work on the team.
-- Give each token a short expiration; a run takes minutes. Create each one with Custom Scopes, exactly the scopes
-  named; a token with more (Full Access, Read Only or extra scopes) is reported, and you choose whether to keep it.
-- Set a spend threshold on the model access key (a spend alert on Managed Access Keys (Serverless Inference)).
-- The team needs room for {MICROVMS_NEEDED} MicroVMs at once (paused ones count); the limit is checked below.
-- The droplet and its snapshot are billed until `uv run examples/incident_common/setup_droplet.py --cleanup`;
-  `uv run scripts/delete_all.py` lists and deletes MicroVMs a stopped run left.
-- The actor's GitHub and DigitalOcean connections stay after the clean-up; delete them when you no longer need
-  them (Action Gateway documentation: How to Manage Connections)."""
+
+def recommendations(plan: Plan) -> str:
+    lines = [
+        "Before you start",
+        "- Use a DigitalOcean team of its own for examples, or set DO_MICROVM_NAMESPACE (1-16 lowercase letters or",
+        "  digits), so these MicroVMs and the clean-up scripts stay apart from other work on the team.",
+        "- Give each token a short expiration; a run takes minutes. Create each one with Custom Scopes, exactly the",
+        "  scopes named; a token with more (Full Access, Read Only or extra scopes) is reported, and you choose whether",
+        "  to keep it.",
+    ]
+    if plan.model:
+        lines.append("- Set a spend threshold on the model access key (a spend alert on Managed Access Keys (Serverless "
+                     "Inference)).")
+    lines += [f"- The team needs room for up to {plan.microvms} MicroVMs at once (paused ones count); the limit is "
+              "checked below.",
+              "- `uv run scripts/delete_all.py` lists and deletes MicroVMs a stopped run left."]
+    if plan.incident:
+        lines += ["- 09: the droplet and its snapshot are billed until "
+                  "`uv run examples/incident_common/setup_droplet.py --cleanup`.",
+                  "- 09: the actor's GitHub and DigitalOcean connections stay after the clean-up; delete them when you no",
+                  "  longer need them (Action Gateway documentation: How to Manage Connections)."]
+    return "\n".join(lines)
+
 
 # (command, why, where to get it, needed when)
 TOOLS: tuple[tuple[str, str, str, str], ...] = (
@@ -156,7 +223,15 @@ TOOLS: tuple[tuple[str, str, str, str], ...] = (
     ("ssh-keygen", "creates the droplet's temporary key pair", "OpenSSH", "droplet"),
     ("crane", "pushes the sandbox image (only when DO_MICROVM_IMAGE is unset)",
      "https://github.com/google/go-containerregistry/blob/main/cmd/crane/README.md", "image"),
+    ("dcode", "Deep Agents Code, example 02's CLI (Python 3.12+)",
+     "`uv sync --all-extras` in this checkout, or examples/02_deepagents_code/README.md", "dcode"),
 )
+
+
+def _which(command: str) -> str | None:
+    """On PATH, or in this interpreter's environment (where `uv sync` installs dcode)."""
+    beside = Path(sys.executable).parent / command
+    return shutil.which(command) or (str(beside) if beside.exists() else None)
 
 
 def broader_than_needed(token: str) -> bool:
@@ -189,11 +264,11 @@ def verify_repo(repo: str) -> Verdict:
 def verify_image(image: str, registry_token: str | None) -> Verdict:
     """The image's manifest can be read: anonymously, or with the registry token for a DigitalOcean registry."""
     if shutil.which("crane") is None:
-        return None, "not checked: crane is not installed (prepare.py boots it)"
+        return None, "not checked: crane is not installed (the first sandbox boots it)"
     registry = image.split("/", 1)[0]
     private = registry == "registry.digitalocean.com"
     if private and not registry_token:
-        return None, "not checked: set DO_REGISTRY_TOKEN (registry:read) to check it here (prepare.py boots it)"
+        return None, "not checked: set DO_REGISTRY_TOKEN (registry:read) to check it here (the first sandbox boots it)"
     with tempfile.TemporaryDirectory(prefix="microvm-image-check-") as tmp:
         env = {**os.environ, "DOCKER_CONFIG": tmp}
         if private and registry_token:
@@ -223,14 +298,20 @@ def verify_droplet() -> Verdict:
 
 
 class Setup:
-    def __init__(self, env_file: Path, *, dry_run: bool) -> None:
+    def __init__(self, env_file: Path, plan: Plan, *, dry_run: bool) -> None:
         self.env_file = env_file
+        self.plan = plan
         self.dry_run = dry_run
         self.env = {k: v for k, v in dotenv_values(env_file).items() if v} if env_file.exists() else {}
         self.todo: list[str] = []
         self.unchecked: list[str] = []  # set, but only the full run can check it
+        self.step = 0
 
     # ── output and input ──────────────────────────────────────────────────────
+    def heading(self, title: str) -> None:
+        print(f"\n{self.step}. {title}")
+        self.step += 1
+
     @staticmethod
     def say(mark: str, what: str, detail: str = "") -> None:
         print(f"[{mark:<4}] {what}" + (f": {detail}" if detail else ""), flush=True)
@@ -269,29 +350,35 @@ class Setup:
 
     # ── steps ─────────────────────────────────────────────────────────────────
     def prerequisites(self, *, repo: bool, droplet: bool) -> bool:
-        print("\n0. Prerequisites")
-        needed = {"repo": repo, "droplet": droplet, "image": not self.env.get("DO_MICROVM_IMAGE")}
+        self.heading("Prerequisites")
+        needed = {"repo": repo, "droplet": droplet, "image": self.plan.image and not self.env.get("DO_MICROVM_IMAGE"),
+                  "dcode": self.plan.dcode}
         ok = True
         for command, why, where, when in TOOLS:
             if not needed[when]:
                 continue
-            if shutil.which(command):
+            if _which(command):
                 self.say("ok", command)
             else:
-                self.say("FAIL", command, f"not on PATH; {why}. Install: {where}")
+                self.say("FAIL", command, f"not found; {why}. Install: {where}")
                 ok = False
+        if self.plan.dcode and sys.version_info < (3, 12):
+            self.say("FAIL", "Python", f"{sys.version.split()[0]}; dcode (02) needs Python 3.12+")
+            ok = False
         if repo and shutil.which("gh"):
             if _run(["gh", "auth", "status"]) is None:
                 self.say("FAIL", "gh login", "run `gh auth login` (scope: repo)")
                 ok = False
             else:
                 self.say("ok", "gh login")
+        if not needed["repo"] and not needed["droplet"] and not needed["image"] and not needed["dcode"]:
+            self.say("ok", "nothing to install for the selected steps")
         if not ok:
             self.todo.append("install the tools marked FAIL under Prerequisites")
         return ok
 
     def team_room(self) -> None:
-        """The team's MicroVM limit against what a run holds, as a recommendation; it changes nothing."""
+        """The team's MicroVM limit against what each selected example holds, as a recommendation; it changes nothing."""
         from check_setup import live_probes
 
         probes, client = live_probes(self.env, deep=False)
@@ -307,19 +394,26 @@ class Setup:
             self.say("ok", "team limit", f"none reported; {team.live} MicroVM(s) on the team")
             return
         free = team.limit - team.live
-        self.say("ok" if free >= MICROVMS_NEEDED else "warn", "team limit",
-                 f"{team.limit}, {team.live} MicroVM(s) on the team, {max(free, 0)} free; a run needs {MICROVMS_NEEDED}"
-                 + ("" if free >= MICROVMS_NEEDED else ": delete some, or have the team's limit raised"))
+        short = [f"{n} ({BY_NUMBER[n].microvms})" for n in self.plan.examples if BY_NUMBER[n].microvms > free]
+        detail = f"{team.limit}, {team.live} MicroVM(s) on the team, {max(free, 0)} free"
+        if short:
+            self.say("warn", "team limit", f"{detail}; too few for {', '.join(short)}: delete some, or have the team's "
+                     "limit raised")
+        else:
+            self.say("ok", "team limit", f"{detail}; enough for each selected example (up to {self.plan.microvms})")
 
     def tokens(self) -> bool:
-        print("\n1. Tokens")
+        self.heading("Tokens")
         ok = True
-        for secret in SECRETS:
+        for secret in secrets_for(self.plan, self.env):
             value = self.env.get(secret.key, "")
             problem = secret.check(value, self.env) if value else "not set"
             if problem is None:
                 if not self.broader(secret, value):
-                    self.say("ok", secret.key, "accepted")
+                    self.say("ok", secret.key, "set" if secret.optional else "accepted")
+                continue
+            if secret.optional and self.dry_run:
+                self.verdict(secret.key, (None, f"not set ({secret.scopes})"), "")
                 continue
             self.say("need", secret.key, problem)
             if self.dry_run:
@@ -330,7 +424,7 @@ class Setup:
             while True:
                 value = getpass.getpass(f"       paste {secret.key} (input hidden, empty to skip): ").strip()
                 if not value:
-                    ok = False
+                    ok &= secret.optional
                     break
                 if (problem := secret.check(value, self.env)) is None:
                     if self.broader(secret, value) and not self.confirm("       keep this token anyway?"):
@@ -344,7 +438,7 @@ class Setup:
         return ok
 
     def actor(self) -> bool:
-        print("\n2. Action Gateway actor")
+        self.heading("Action Gateway actor (09)")
         if actor := self.env.get("DO_ACTION_GATEWAY_ACTOR_ID"):
             self.verdict("DO_ACTION_GATEWAY_ACTOR_ID", (None, f"{actor}; not checked here (setup_droplet.py and prepare.py "
                                                               "call the gateway as this actor)"), "")
@@ -360,7 +454,7 @@ class Setup:
         return True
 
     def image(self) -> bool:
-        print("\n3. Sandbox image")
+        self.heading("Sandbox image")
         if image := self.env.get("DO_MICROVM_IMAGE"):
             ok = self.verdict(f"DO_MICROVM_IMAGE {image}", verify_image(image, self.env.get("DO_REGISTRY_TOKEN")),
                               "rebuild the sandbox image (unset DO_MICROVM_IMAGE and run this script)")
@@ -408,7 +502,7 @@ class Setup:
         return f"registry.digitalocean.com/{response.json()['registry']['name']}/microvm-sandbox"
 
     def repo(self, *, refresh: bool) -> bool:
-        print("\n4. Demo repository")
+        self.heading("Demo repository (09)")
         repo = self.env.get("DO_INCIDENT_REPO")
         if repo and not refresh:
             ok = self.verdict(f"DO_INCIDENT_REPO {repo}", verify_repo(repo), "rebuild the demo repository (--refresh-repo)")
@@ -458,11 +552,7 @@ class Setup:
         return True
 
     def droplet(self) -> bool:
-        print("\n5. Droplet, connections, pre-flight")
-        if self.env.get("DO_MICROVM_TRANSPORT", "").lower() == "local":
-            self.say("FAIL", "DO_MICROVM_TRANSPORT", f"is `local` in {self.env_file.name}; remove it for a real run")
-            self.todo.append(f"remove DO_MICROVM_TRANSPORT=local from {self.env_file.name}")
-            return False
+        self.heading("Droplet, connections, pre-flight (09)")
         if DROPLET_STATE.exists():
             if not self.verdict("droplet incident-svc", verify_droplet(),
                                 "recreate the droplet: setup_droplet.py --cleanup, then this script"):
@@ -471,7 +561,7 @@ class Setup:
             if repo and repo != self.env.get("DO_INCIDENT_REPO"):
                 self.say("warn", "droplet", f"was set up from {repo}, not DO_INCIDENT_REPO; recreate it (--cleanup)")
             if self.dry_run:
-                self.unchecked.append("the template and a gateway endpoint with the example's tools (prepare.py, full run)")
+                self.unchecked.append("09: the template and a gateway endpoint with the example's tools (prepare.py, full run)")
                 return True
         elif self.dry_run:
             self.say("need", "droplet", "not created")
@@ -482,7 +572,14 @@ class Setup:
                   "setup_droplet.py --cleanup)")
             if not self.confirm("       create them now?") or not _step("examples/incident_common/setup_droplet.py"):
                 return False
-        return _step("examples/09_incident_response/prepare.py", "--clean") and _step("scripts/check_setup.py", "--examples", "09")
+        return _step("examples/09_incident_response/prepare.py", "--clean")
+
+    def transport(self) -> bool:
+        if self.env.get("DO_MICROVM_TRANSPORT", "").lower() != "local":
+            return True
+        self.say("FAIL", "DO_MICROVM_TRANSPORT", f"is `local` in {self.env_file.name}; remove it for a real run")
+        self.todo.append(f"remove DO_MICROVM_TRANSPORT=local from {self.env_file.name}")
+        return False
 
 
 def _run(command: list[str]) -> str | None:
@@ -496,43 +593,67 @@ def _step(script: str, *args: str) -> bool:
     return subprocess.run([sys.executable, str(ROOT / script), *args], cwd=ROOT, check=False).returncode == 0
 
 
+def parse_examples(value: str | None, parser: argparse.ArgumentParser) -> tuple[str, ...]:
+    if not value:
+        return BASE
+    numbers = tuple(dict.fromkeys(n.strip().zfill(2) for n in value.split(",") if n.strip()))
+    unknown = [n for n in numbers if n not in BY_NUMBER]
+    if unknown:
+        parser.error(f"no example {', '.join(unknown)}; the examples are {', '.join(BY_NUMBER)}")
+    own = [n for n in numbers if n in OWN_SETUP]
+    if own:
+        parser.error("; ".join(f"{n} is set up as its README describes ({OWN_SETUP[n]})" for n in own))
+    return numbers
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser.add_argument("--examples", help=f"comma-separated numbers, e.g. 09,07 (default: the base, {', '.join(BASE)})")
     parser.add_argument("--dry-run", action="store_true", help="check and report each step; change nothing")
-    parser.add_argument("--skip-repo", action="store_true", help="leave DO_INCIDENT_REPO as it is")
-    parser.add_argument("--skip-droplet", action="store_true", help="stop before the droplet and the pre-flight")
-    parser.add_argument("--refresh-repo", action="store_true", help="rebuild the demo repository's two commits")
+    parser.add_argument("--skip-repo", action="store_true", help="09: leave DO_INCIDENT_REPO as it is")
+    parser.add_argument("--skip-droplet", action="store_true", help="09: stop before the droplet and the pre-flight")
+    parser.add_argument("--refresh-repo", action="store_true", help="09: rebuild the demo repository's two commits")
     add_env_file_argument(parser)
     args = parser.parse_args(argv)
+    plan = Plan.of(parse_examples(args.examples, parser))
     if not args.dry_run and not sys.stdin.isatty():
         parser.error("needs a terminal (tokens are typed in); --dry-run works without one")
     shadowed = [k for k in os.environ if k.startswith(("DO_MICROVM_", "DO_ACTION_GATEWAY_", "DO_MODEL_", "DO_INCIDENT_"))]
     if shadowed:
-        print(f"note: set in the shell (the examples use these over {args.env_file.name}):{', '.join(sorted(shadowed))}")
+        print(f"note: set in the shell (the examples use these over {args.env_file.name}): {', '.join(sorted(shadowed))}")
 
-    setup = Setup(args.env_file if args.env_file else DEFAULT_ENV_FILE, dry_run=args.dry_run)
-    print(RECOMMENDATIONS)
-    if not setup.prerequisites(repo=not args.skip_repo, droplet=not args.skip_droplet) and not args.dry_run:
+    setup = Setup(args.env_file if args.env_file else DEFAULT_ENV_FILE, plan, dry_run=args.dry_run)
+    print(f"Examples: {', '.join(plan.examples)}\n\n{recommendations(plan)}")
+    repo, droplet = plan.incident and not args.skip_repo, plan.incident and not args.skip_droplet
+    if not setup.prerequisites(repo=repo, droplet=droplet) and not args.dry_run:
         print("\nInstall what is marked FAIL, then run this again (nothing was changed).")
         return 1
-    ready = setup.tokens() & setup.actor() & setup.image()
-    if not args.skip_repo:
+    ready = setup.transport() & setup.tokens()
+    if plan.incident:
+        ready &= setup.actor()
+    if plan.image:
+        ready &= setup.image()
+    if repo:
         ready &= setup.repo(refresh=args.refresh_repo)
-    if ready and not args.skip_droplet:
+    if ready and droplet:
         ready &= setup.droplet()
+    if ready and not args.dry_run:
+        ready &= _step("scripts/check_setup.py", "--examples", ",".join(plan.examples))
     if setup.todo:
         print("\nTo do:\n" + "\n".join(f"- {item}" for item in setup.todo))
     if setup.unchecked:
         print("\nNot checked by this run (marked --):\n" + "\n".join(f"- {item}" for item in setup.unchecked))
     if args.dry_run:
-        print("\n" + ("Ready: every read-only check passed. Run without --dry-run for the pre-flight (prepare.py)."
-                      if ready else "Not ready: see To do. Run without --dry-run to set it up."))
-    elif ready and not args.skip_droplet:
-        print("\nReady. Start the incident and run it (examples/09_incident_response/README.md, Run (real mode)):\n"
-              "  uv run examples/incident_common/setup_droplet.py --deploy-bad\n"
-              "  uv run examples/09_incident_response/dashboard.py          # terminal 2\n"
-              "  uv run examples/09_incident_response/run_script.py --delete\n"
-              "  uv run examples/incident_common/setup_droplet.py --cleanup  # afterwards")
+        print("\n" + ("Ready: every read-only check passed. Run without --dry-run to finish the setup and run "
+                      "scripts/check_setup.py." if ready else "Not ready: see To do. Run without --dry-run to set it up."))
+    elif ready:
+        print("\nReady. Run the examples as their READMEs describe (examples/README.md).")
+        if droplet:
+            print("09 (examples/09_incident_response/README.md, Run (real mode)):\n"
+                  "  uv run examples/incident_common/setup_droplet.py --deploy-bad\n"
+                  "  uv run examples/09_incident_response/dashboard.py          # terminal 2\n"
+                  "  uv run examples/09_incident_response/run_script.py --delete\n"
+                  "  uv run examples/incident_common/setup_droplet.py --cleanup  # afterwards")
     return 0 if ready else 1
 
 
