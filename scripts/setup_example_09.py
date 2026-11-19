@@ -10,7 +10,7 @@ starts with recommendations (a team or namespace of its own, token expiry, a spe
 1. Tokens. DigitalOcean personal access tokens and model access keys are created in the Control Panel, so for each one
    that is missing or refused the script names the page and the scopes, reads the value without echoing it, checks it
    and writes it to `.env` (mode 0600). Checked: the control token lists MicroVMs; the access token cannot create
-   MicroVMs (an empty create request, which creates nothing, is refused with 403); the model key can call both
+   MicroVMs (checked with an empty create request, which creates nothing); the model key can call both
    models example 09 uses; the Action Gateway token reads the tool catalog. A DigitalOcean token that can also read
    droplets or the account (Full Access, Read Only, or extra custom scopes) is reported as broader than needed; a
    pasted one is saved only if you confirm, one already in `.env` is kept with the warning. The control token then
@@ -94,7 +94,7 @@ def check_control(token: str, env: Mapping[str, str]) -> str | None:
 def check_access(token: str, env: Mapping[str, str]) -> str | None:
     if token == env.get("DO_MICROVM_API_TOKEN"):
         return "this is the control token; create a separate token with microvm:access only"
-    # An empty create request creates nothing: a token with microvm:create gets 400 (the body), one without it 403.
+    # An empty create request, which creates nothing; the check reads 400 or 422 (the body) as a token that may create.
     try:
         status = httpx.post(f"{API}/microvms", headers={"Authorization": f"Bearer {token}"}, json={}, timeout=15.0).status_code
     except httpx.HTTPError:
@@ -103,7 +103,7 @@ def check_access(token: str, env: Mapping[str, str]) -> str | None:
         return "this token can create MicroVMs; create one with microvm:access only"
     if status == 401:
         return "401: the token was refused"
-    return None  # 403: no create scope; its use on an endpoint is checked by prepare.py
+    return None  # no create scope; its use on an endpoint is checked by prepare.py
 
 
 def check_model_key(key: str, env: Mapping[str, str]) -> str | None:
