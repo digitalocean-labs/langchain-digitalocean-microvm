@@ -2,6 +2,14 @@
 
 **Requires** (real MicroVMs): a team limit of at least 6 MicroVMs, one per specialist (four analysts, auditor, publisher), plus 1 temporary MicroVM while the template is built. The orchestrator runs in your process.
 
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+DO_MICROVM_TRANSPORT=local uv run --with matplotlib examples/08_board_pack/run_script.py
+```
+
+The live dashboard and real MicroVMs: see Run below.
+
 ## Overview
 
 **The scenario.** A **board pack** is the document a company's leadership sends its board of

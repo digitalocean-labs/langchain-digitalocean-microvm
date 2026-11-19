@@ -2,6 +2,15 @@
 
 **Requires** (real MicroVMs): a team limit of at least 1 MicroVM at a time (the cold sandbox is deleted before the warm clone). The template is a checkpoint, not a MicroVM.
 
+**Quick run** (a real MicroVM; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+uv run python scripts/setup_examples.py
+uv run examples/06_warm_start/warm_start.py
+```
+
+Setup and options: see below.
+
 **The use case.** An agent's sandbox often needs preparing before the agent can work: data uploaded, packages
 installed. Doing that for every new user or conversation costs time before the agent's first
 answer. A template does it once and gives every new sandbox a ready copy in a few seconds.

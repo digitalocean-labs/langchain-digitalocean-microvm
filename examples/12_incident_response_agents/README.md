@@ -5,6 +5,14 @@ per specialist); the commander's and the specialists' images (below); an Action 
 DigitalOcean connection and a code-host connection; the droplet of [`../incident_common/`](../incident_common); a public
 HTTPS URL for the relay's broker port (a tunnel is enough for a demo). Local mode needs none of it.
 
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+DO_MICROVM_TRANSPORT=local uv run examples/12_incident_response_agents/console.py demo --approve
+```
+
+Prompts, the approvals page and real MicroVMs: see Run below.
+
 ## Overview
 
 **The scenario.** The same incident as [example 09](../09_incident_response): a checkout service on a droplet fails after
@@ -195,11 +203,21 @@ uv run python scripts/setup_examples.py --examples 12 --dry-run   # checks only
 
 By hand:
 
-Set in `.env`: `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` (see the repository's README), `DO_MODEL_ACCESS_KEY`,
-`DO_ACTION_GATEWAY_TOKEN` (a [personal access token](https://docs.digitalocean.com/reference/api/create-personal-access-token/) authorized for Action Gateway; [quickstart](https://docs.digitalocean.com/products/managed-agents/action-gateway/quickstart/)) and `DO_ACTION_GATEWAY_ACTOR_ID` (the actor needs a DigitalOcean
-connection and a code-host connection that reads the repository's commits), and `DO_INCIDENT_REPO=owner/name`; leave
-`DO_MICROVM_TRANSPORT` unset. Build the demo repository and the droplet as [example 09](../09_incident_response#run-real-mode)
-does.
+Set in `.env` (`DO_MICROVM_TRANSPORT` stays unset):
+
+```bash
+# .env
+DO_MICROVM_API_TOKEN=...             # microvm:create/read/update/delete
+DO_MICROVM_ACCESS_TOKEN=...          # microvm:access only (see the repository's README)
+DO_MODEL_ACCESS_KEY=...
+DO_ACTION_GATEWAY_TOKEN=...          # a personal access token authorized for Action Gateway
+DO_ACTION_GATEWAY_ACTOR_ID=...
+DO_INCIDENT_REPO=owner/name          # the public demo repository
+```
+
+`DO_ACTION_GATEWAY_TOKEN` is a [personal access token](https://docs.digitalocean.com/reference/api/create-personal-access-token/) authorized for Action Gateway ([quickstart](https://docs.digitalocean.com/products/managed-agents/action-gateway/quickstart/)).
+The actor needs a DigitalOcean connection and a code-host connection that reads the repository's commits.
+Build the demo repository and the droplet as [example 09](../09_incident_response#run-real-mode) does.
 
 **The images.** The commander's host runs `host/` from an image of its own, and each specialist's host runs `specialists/`
 from another. Build both, and again after changing this package, the example's modules or `incident_common`:

@@ -8,6 +8,15 @@
 > (the sales assistant with a per-thread sandbox), with a DigitalOcean MicroVM
 > as each thread's sandbox.
 
+**Quick run** (a real MicroVM; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+uv run python scripts/setup_examples.py --examples 07
+uv run examples/07_sales_assistant/run_script.py
+```
+
+Setup and options: see Run below.
+
 The Chinook Sales Assistant works Jane Peacock's book of business with skills (territory
 report, RFQ quote, weekly newsletter), specialist subagents (database analyst, inbox manager,
 quote reviewer), human approvals for the two writes (a new customer, a saved draft), and a
