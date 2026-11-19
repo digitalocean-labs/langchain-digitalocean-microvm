@@ -46,7 +46,7 @@ relay that takes the alerts, an approvals page, and the commander and each speci
 see [example 12](../12_incident_response_agents).
 
 ```
- you ── run_script.py (console: streams the run, asks you to approve)     dashboard.py (second terminal)
+ you ── run_script.py (console: streams the run, asks you to approve)     dashboard.py (a terminal of its own)
           │
  incident-commander (no shell, no action tools) ─ Action Gateway: allow / ask / deny
           │   task ×3, in parallel
@@ -113,11 +113,15 @@ this example is not affiliated with or endorsed by it.
 ## Run (local mode, no account)
 
 ```bash
-uv sync --all-extras          # from the repository root
+# in terminal #1 run, from the repository root (pre-flight, then the live dashboard):
+uv sync --all-extras
 export DO_MICROVM_TRANSPORT=local
-uv run examples/09_incident_response/prepare.py --clean      # pre-flight
-uv run examples/09_incident_response/dashboard.py            # terminal 2
-uv run examples/09_incident_response/run_script.py           # terminal 1: the alert, the approval prompt, the follow-up
+uv run examples/09_incident_response/prepare.py --clean
+uv run examples/09_incident_response/dashboard.py
+
+# in terminal #2 run (the alert, the approval prompt, the follow-up):
+export DO_MICROVM_TRANSPORT=local
+uv run examples/09_incident_response/run_script.py
 ```
 
 MicroVMs are local directories (the agents' commands then run on this machine), the gateway and the droplet are in memory
@@ -154,12 +158,19 @@ cd /tmp/checkout-demo && git remote add origin https://github.com/<you>/<repo>.g
 Build it shortly before a run: the change investigator reports how long before the error onset the suspect commit was made.
 
 ```bash
+# one-off setup and pre-flight, in any terminal:
 uv run examples/incident_common/setup_droplet.py                    # droplet checkout-svc, the service, snapshot checkout-svc-snapshot
 uv run examples/incident_common/setup_droplet.py --verify-restore   # optional: bad deploy, restore, wait for health
 uv run examples/09_incident_response/prepare.py --clean
 uv run examples/incident_common/setup_droplet.py --deploy-bad       # the failure starts
-uv run examples/09_incident_response/dashboard.py                   # terminal 2: also polls the MicroVMs' status and the service's /health
-uv run examples/09_incident_response/run_script.py --delete         # terminal 1: deletes the thread's four MicroVMs at the end
+
+# in terminal #1 run (the live dashboard; also polls the MicroVMs' status and the service's /health):
+uv run examples/09_incident_response/dashboard.py
+
+# in terminal #2 run (deletes the thread's four MicroVMs at the end):
+uv run examples/09_incident_response/run_script.py --delete
+
+# when the run is over, in terminal #2:
 uv run examples/incident_common/setup_droplet.py --cleanup          # deletes the droplet, the snapshot and the ssh key
 ```
 

@@ -94,10 +94,13 @@ uv run python scripts/setup_examples.py --dry-run   # checks only
 Then:
 
 ```bash
-uv run examples/08_board_pack/prepare.py --clean          # pre-flight, template, empty dashboard
-uv run examples/08_board_pack/dashboard.py                # terminal 2: the VM tiles
-uv run examples/08_board_pack/run_script.py               # terminal 1: board pack + a follow-up
-uv run examples/08_board_pack/run_script.py --delete      # ... and delete the thread's VMs at the end
+# in terminal #1 run (pre-flight, template, empty dashboard; then the VM tiles):
+uv run examples/08_board_pack/prepare.py --clean
+uv run examples/08_board_pack/dashboard.py
+
+# in terminal #2 run (board pack + a follow-up):
+uv run examples/08_board_pack/run_script.py
+uv run examples/08_board_pack/run_script.py --delete      # or: delete the thread's VMs at the end
 ```
 
 Interactive, with LangGraph Studio (opens in the browser) or agent-chat-ui:
