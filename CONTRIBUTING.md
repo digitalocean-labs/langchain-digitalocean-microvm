@@ -87,8 +87,9 @@ uv sync --all-extras
 git push -u origin my-change     # then open the pull request against `main`
 ```
 
-Checks run locally for now: CI is started by hand (`workflow_dispatch`), so a pull request shows no
-automatic result. Run `uv run ruff check .` and `uv run pytest` before you push.
+CI (`.github/workflows/ci.yml`) runs on every pull request and on each push to `main`: lint, types, the
+unit, end-to-end and standard-suite tests on Python 3.11 and 3.13, and a hygiene job with the wording gate
+and the secret scan. Run `uv run ruff check .` and `uv run pytest` before you push.
 
 - One change per pull request, with tests (local mode where possible).
 - `uv run ruff check .` and `uv run pytest` pass.
