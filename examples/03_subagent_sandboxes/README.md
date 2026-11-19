@@ -2,6 +2,14 @@
 
 **Requires** (real MicroVMs): a team limit of at least 2 MicroVMs (one per subagent) for each thread.
 
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+DO_MICROVM_TRANSPORT=local uv run examples/03_subagent_sandboxes/run_script.py --delete
+```
+
+Real MicroVMs: see Real MicroVMs below.
+
 **The use case.** A supervisor agent has two helpers: an **analyst** that computes revenue per region from a sales
 CSV file, and a **reviewer** that checks the analyst's numbers. In Deep Agents a subagent normally works in the main
 agent's backend, so every subagent sees and can change the same files. Here each subagent gets **its own

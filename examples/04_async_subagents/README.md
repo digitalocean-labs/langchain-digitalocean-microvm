@@ -7,6 +7,14 @@
 > (`python/m5/async_lab`), whose supervisor delegates to an `AsyncSubAgent` on a
 > deployment you start by hand.
 
+**Quick run** (local mode: no DigitalOcean account; each host is a local `langgraph dev` process, and the agents' commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+uv run examples/04_async_subagents/run_script.py
+```
+
+Real MicroVMs: see Real MicroVMs below.
+
 This supervisor is the same kind of deep agent, but its specs point at an
 embedded **SubAgentGateway** (`langchain_digitalocean_microvm.agent_host`,
 experimental, installed with the `agent-host` extra) that runs every task in an **agent host**: a DigitalOcean MicroVM running the

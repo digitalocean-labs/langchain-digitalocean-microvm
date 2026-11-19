@@ -5,6 +5,16 @@ verifier (paused while a human decides), plus 1 temporary MicroVM while the temp
 whose actor has a DigitalOcean connection and a code-host connection; a public repository you own; a small droplet for
 the length of the run (below). Local mode needs none of it.
 
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+export DO_MICROVM_TRANSPORT=local
+uv run examples/09_incident_response/prepare.py --clean
+uv run examples/09_incident_response/run_script.py --approve
+```
+
+The live dashboard, prompts and real MicroVMs: see Run below.
+
 ## Overview
 
 **The scenario.** You are on call. A checkout service running on a droplet (a DigitalOcean virtual machine) starts
@@ -143,10 +153,22 @@ uv run python scripts/setup_examples.py --examples 09 --dry-run   # checks only
 
 The steps by hand:
 
-Set in `.env`: `DO_MICROVM_API_TOKEN`, `DO_MICROVM_IMAGE` (see the repository's README), `DO_MODEL_ACCESS_KEY`,
-`DO_ACTION_GATEWAY_TOKEN` (a [personal access token](https://docs.digitalocean.com/reference/api/create-personal-access-token/) authorized for Action Gateway; [quickstart](https://docs.digitalocean.com/products/managed-agents/action-gateway/quickstart/)), `DO_ACTION_GATEWAY_ACTOR_ID`, and `DO_INCIDENT_REPO=owner/name`;
-leave `DO_MICROVM_TRANSPORT` unset. The actor needs a DigitalOcean connection (the droplet) and a code-host connection
-that reads the repository's commits; the first call without one returns a connect link, which the console shows.
+Set in `.env` (`DO_MICROVM_TRANSPORT` stays unset):
+
+```bash
+# .env
+DO_MICROVM_API_TOKEN=...             # microvm:create/read/update/delete
+DO_MICROVM_ACCESS_TOKEN=...          # microvm:access only
+DO_MICROVM_IMAGE=...                 # see the repository's README
+DO_MODEL_ACCESS_KEY=...
+DO_ACTION_GATEWAY_TOKEN=...          # a personal access token authorized for Action Gateway
+DO_ACTION_GATEWAY_ACTOR_ID=...
+DO_INCIDENT_REPO=owner/name          # the public demo repository, built below
+```
+
+`DO_ACTION_GATEWAY_TOKEN` is a [personal access token](https://docs.digitalocean.com/reference/api/create-personal-access-token/) authorized for Action Gateway ([quickstart](https://docs.digitalocean.com/products/managed-agents/action-gateway/quickstart/)).
+The actor needs a DigitalOcean connection (the droplet) and a code-host connection that reads the repository's commits;
+the first call without one returns a connect link, which the console shows.
 
 Build the demo repository and push it to a **public** repository of your own (the droplet clones it):
 

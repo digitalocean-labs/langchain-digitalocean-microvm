@@ -2,6 +2,14 @@
 
 **Requires** (real MicroVMs): a team limit of at least 1 MicroVM.
 
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs `dcode`, Python 3.12+; its model comes from `-M`):
+
+```bash
+DO_MICROVM_TRANSPORT=local uv run dcode --sandbox microvm
+```
+
+Real MicroVMs: see below.
+
 **The use case.** [Deep Agents Code](https://docs.langchain.com/oss/deepagents/code/remote-sandboxes) (`dcode`) is a
 coding agent for the terminal, built on Deep Agents. By default it edits files and runs commands on your machine. With
 this package its files and shell live in a MicroVM instead, so it can install packages and run code without touching

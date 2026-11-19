@@ -7,6 +7,14 @@
 > (`python/m2/m2.3_sandbox_agent.py`), which runs a LangSmith sandbox through a
 > create → use → delete cycle.
 
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py
+```
+
+Real MicroVMs: see Run below.
+
 `quickstart.py` gives a deep agent a MicroVM as its filesystem and shell
 (`MicroVMSandbox`, a deepagents `BaseSandbox`), then shows what MicroVMs add:
 the sandbox is **paused** (memory, files and processes kept) and **resumed**,

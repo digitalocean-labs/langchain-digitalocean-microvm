@@ -4,6 +4,16 @@
 human decides), plus 1 temporary MicroVM while the template is built. Local mode needs none of it. The five systems the
 request touches are **mocks** in every mode (below).
 
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+export DO_MICROVM_TRANSPORT=local
+uv run examples/10_erasure/prepare.py --clean
+uv run examples/10_erasure/run_script.py --approve --deny-system marketing
+```
+
+The live dashboard, prompts and real MicroVMs: see Run below.
+
 ## Overview
 
 **The scenario.** Privacy laws such as the GDPR give people the right to have their personal data erased. A customer,
@@ -131,8 +141,17 @@ graph in LangGraph Studio or agent-chat-ui, see [Run with `langgraph dev`](#run-
 
 ## Run (real MicroVMs)
 
-Set `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN`, `DO_MICROVM_IMAGE` (see the repository's README) and `DO_MODEL_ACCESS_KEY` in `.env`
-and leave `DO_MICROVM_TRANSPORT` unset. To set them up step by step:
+Set in `.env` (`DO_MICROVM_TRANSPORT` stays unset):
+
+```bash
+# .env
+DO_MICROVM_API_TOKEN=...             # microvm:create/read/update/delete
+DO_MICROVM_ACCESS_TOKEN=...          # microvm:access only
+DO_MICROVM_IMAGE=...                 # see the repository's README
+DO_MODEL_ACCESS_KEY=...
+```
+
+To set them up step by step:
 
 ```bash
 uv run python scripts/setup_examples.py

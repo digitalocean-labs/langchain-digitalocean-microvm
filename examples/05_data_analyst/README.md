@@ -8,6 +8,15 @@
 > and `python/m2/m2.4_interpreter_agent.py` (chained SQL questions in an
 > in-process QuickJS interpreter).
 
+**Quick run** (a real MicroVM; needs a model, see [`../README.md`](../README.md)):
+
+```bash
+uv run python scripts/setup_examples.py
+uv run examples/05_data_analyst/analyst.py
+```
+
+Setup and options: see Run below.
+
 A deep agent analyses the Chinook music-store database inside a MicroVM: it
 writes Python (`sqlite3`, `matplotlib`), runs it with `execute`, and saves
 charts under `/outputs/`, which the script copies to `outputs/` here. The
