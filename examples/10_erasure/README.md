@@ -143,8 +143,13 @@ uv run examples/10_erasure/dashboard.py               # terminal 2: also polls t
 uv run examples/10_erasure/run_script.py --delete     # deletes the thread's four MicroVMs at the end
 ```
 
-The template's checkpoint is kept for the next run (it does not count against the team limit); `scripts/delete_all.py`
-lists and deletes the MicroVMs a killed run left behind.
+The template's checkpoint is kept for the next run (it does not count against the team limit). `delete_all.py`
+lists and deletes the MicroVMs a killed run left behind:
+
+```bash
+uv run scripts/delete_all.py         # lists the MicroVMs you created
+uv run scripts/delete_all.py --yes   # deletes them (asks first)
+```
 
 ## Run with `langgraph dev` (Studio, agent-chat-ui)
 
@@ -177,7 +182,7 @@ Three things differ from `run_script.py`:
   (in every mode): once a thread has erased the records, the next finds nothing to erase. Restart `langgraph dev`
   before each new request.
 - **Nothing deletes the MicroVMs.** With real MicroVMs, a thread's four MicroVMs stay paused when its run ends (there
-  is no `--delete`); delete them with `uv run scripts/delete_all.py` (it lists them first) when you are done.
+  is no `--delete`); delete them with `scripts/delete_all.py` (see above) when you are done.
 
 **LangSmith**: set `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY` and `LANGSMITH_PROJECT` in `.env`; `run_script.py`
 and `langgraph dev` both read them, and `prepare.py` reports whether tracing is on. Each run on a thread is a trace

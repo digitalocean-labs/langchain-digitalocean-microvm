@@ -173,8 +173,15 @@ What it creates is recorded in `incident_common/outputs/incident.json`, and the 
 the other scripts load. `--cleanup` deletes the droplet, the snapshot and the key; the droplet and the snapshot are billed
 until then.
 
-The template's checkpoint is kept for the next run (it does not count against the team limit); `scripts/delete_all.py`
-lists and deletes the MicroVMs a killed run left behind. A killed run can also leave its Action Gateway endpoint, named
+The template's checkpoint is kept for the next run (it does not count against the team limit). `delete_all.py`
+lists and deletes the MicroVMs a killed run left behind:
+
+```bash
+uv run scripts/delete_all.py         # lists the MicroVMs you created
+uv run scripts/delete_all.py --yes   # deletes them (asks first)
+```
+
+A killed run can also leave its Action Gateway endpoint, named
 `microvm-ag-*`.
 
 ## Run with `langgraph dev` (Studio, agent-chat-ui)
@@ -208,7 +215,7 @@ Three things differ from `run_script.py`:
 - **One simulated world per server.** The droplet and the gateway live in the server's process and every thread shares
   them: after one thread's restore, the next finds the service healthy. Restart `langgraph dev` before each new incident.
 - **Nothing deletes the MicroVMs.** With real MicroVMs, a thread's MicroVMs stay paused when its run ends (there is
-  no `--delete`); delete them with `uv run scripts/delete_all.py` (it lists them first) when you are done.
+  no `--delete`); delete them with `scripts/delete_all.py` (see above) when you are done.
 
 **LangSmith**: set `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY` and `LANGSMITH_PROJECT` in `.env`; `run_script.py`
 and `langgraph dev` both read them, and `prepare.py` reports whether tracing is on. Each run on a thread is a trace
