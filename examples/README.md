@@ -15,16 +15,16 @@ Each example has its own model setup, run commands and README; the README has th
 | [`04_async_subagents`](04_async_subagents) | 2 | agent-host image (`uv`, `crane`, your registry) | Async subagents inside MicroVMs behind an embedded gateway (experimental) |
 | [`05_data_analyst`](05_data_analyst) | 1 | sandbox image, model key | SQL and charts in a MicroVM; the paused sandbox keeps the database |
 | [`06_warm_start`](06_warm_start) | 1 | sandbox image, model key | Sandbox templates: checkpoint once, clone in seconds |
-| [`07_sales_assistant`](07_sales_assistant) | 1 per thread | sandbox image, model key; optional Tavily key | One MicroVM per conversation thread, paused between turns |
-| [`08_board_pack`](08_board_pack) | 6 | sandbox image, model key | An orchestrator and six specialists, one MicroVM each; live dashboard |
-| [`09_incident_response`](09_incident_response) | 4 per thread | sandbox image, model key, Action Gateway token, a public GitHub repository you own, a small billed droplet | An incident team of MicroVMs; the restore is an Action Gateway approval; live dashboard |
-| [`10_erasure`](10_erasure) | 4 per thread | sandbox image, model key | An erasure request: four locator MicroVMs; Action Gateway approvals; evidence report; live dashboard |
+| [`07_sales_assistant`](07_sales_assistant) | 2 (1 per thread once the template exists) | sandbox image, model key; optional Tavily key | One MicroVM per conversation thread, paused between turns |
+| [`08_board_pack`](08_board_pack) | 7 (6 once the template exists) | sandbox image, model key | An orchestrator and six specialists, one MicroVM each; live dashboard |
+| [`09_incident_response`](09_incident_response) | 5 (4 per thread once the template exists) | sandbox image, model key, Action Gateway token, a public GitHub repository you own, a small billed droplet | An incident team of MicroVMs; the restore is an Action Gateway approval; live dashboard |
+| [`10_erasure`](10_erasure) | 5 (4 per thread once the template exists) | sandbox image, model key | An erasure request: four locator MicroVMs; Action Gateway approvals; evidence report; live dashboard |
 | [`11_vulnerability_response`](11_vulnerability_response) | 6 | sandbox image, model key | A security lead and one analyst MicroVM per repository; Action Gateway approvals; live dashboard |
 | [`12_incident_response_agents`](12_incident_response_agents) | 6 per incident | two images in your registry, everything example 09 needs, a public HTTPS URL for the relay's broker port (a tunnel is enough) | Example 09's incident handled by specialist agents, each in a MicroVM agent host of its own; a human decides in the console or on an approvals page |
 
 The incident of examples 09 and 12 (the droplet, its service, the simulated world) is in [`incident_common`](incident_common).
 
-The minimum is the team limit needed to run the example on real MicroVMs; paused MicroVMs count against it, so delete finished sandboxes. Local mode needs none.
+The minimum is the team limit needed to run the example on real MicroVMs: the most MicroVMs a run holds at once, including the temporary MicroVM that builds a template (the number in brackets applies once the template exists). Paused MicroVMs count against it, so delete finished sandboxes. Local mode needs none.
 
 ## Try them in local mode
 
