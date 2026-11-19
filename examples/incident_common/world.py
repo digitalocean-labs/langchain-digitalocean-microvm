@@ -30,7 +30,7 @@ from langchain_digitalocean_microvm.integrations.action_gateway_local import (
 OWNER, REPO = "acme", "checkout-service"
 DROPLET_ID = 424242
 SNAPSHOT_ID = 777001
-DROPLET_NAME, SNAPSHOT_NAME = "incident-svc", "incident-good"  # the names setup_droplet.py gives the real ones
+DROPLET_NAME, SNAPSHOT_NAME = "checkout-svc", "checkout-svc-snapshot"  # the names setup_droplet.py gives the real ones
 DEPLOYED_MIN_AGO = 24
 GOOD_SHA, BAD_SHA = "9f3c2d1", "a1b2c3d"
 
