@@ -85,7 +85,7 @@ def test_plan_per_example() -> None:
     assert setup.Plan.of(("02",)).dcode and setup.Plan.of(("09", "07")).incident
 
 
-@pytest.mark.parametrize(("value", "error"), [("12", "README"), ("04,09", "agent-host image"), ("13", "no example 13")])
+@pytest.mark.parametrize(("value", "error"), [("04", "README"), ("04,09", "agent-host image"), ("13", "no example 13")])
 def test_examples_with_their_own_setup_or_unknown_are_refused(value: str, error: str,
                                                              capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
@@ -236,3 +236,70 @@ def test_dry_run_ready_when_everything_checks(api: dict[tuple[str, str], int], t
     monkeypatch.setattr(setup, "verify_droplet", lambda: (False, "the service does not answer"))
     assert setup.main(["--dry-run", "--examples", "09", "--env-file", str(env_file)]) == 1
     assert "recreate the droplet" in capsys.readouterr().out
+
+
+def test_plan_for_12() -> None:
+    plan = setup.Plan.of(("12",))
+    assert (plan.incident, plan.agents, plan.gateway, plan.image) == (True, True, True, False)
+    assert plan.incident_label == "12" and setup.Plan.of(("09", "12")).incident_label == "09, 12"
+    assert not setup.Plan.of(("09",)).agents
+
+
+def _setup_12(tmp_path: Path, env: str, *, dry_run: bool = True) -> setup.Setup:
+    env_file = tmp_path / ".env"
+    env_file.write_text(env)
+    return setup.Setup(env_file, setup.Plan.of(("12",)), dry_run=dry_run)
+
+
+@pytest.mark.parametrize(("current", "manifest", "ok", "detail"), [
+    ("abc123", (True, "found"), True, "built from these sources"),
+    ("fff999", (True, "found"), False, "tag abc123, the sources hash to fff999"),
+    (None, (True, "found"), True, "was not checked"),  # uv or crane missing: the manifest only
+    ("abc123", (False, "cannot be read"), False, "cannot be read"),
+])
+def test_host_image_checked_against_its_sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                capsys: pytest.CaptureFixture[str], current: str | None,
+                                                manifest: tuple[bool, str], ok: bool, detail: str) -> None:
+    monkeypatch.setattr(setup, "content_hash", lambda spec: current)
+    monkeypatch.setattr(setup, "verify_image", lambda image, token: manifest)
+    s = _setup_12(tmp_path, "DO_INCIDENT_HOST_IMAGE=registry.digitalocean.com/reg/commander:abc123\n")
+    key, what, spec, name = setup.HOST_IMAGES[0]
+    assert s.host_image(key, what, spec, name) is ok
+    assert detail in capsys.readouterr().out
+    assert bool(s.todo) is not ok
+
+
+def test_host_image_build_keeps_its_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    class Done:
+        returncode = 0
+        stdout = "layer: 1 MiB\n\npushed registry.digitalocean.com/reg/commander:fff999\n  digest ref: x\n"
+        stderr = ""
+
+    def run(command: list[str], **kwargs: object) -> Done:
+        calls.append(command)
+        assert "sekrit" not in " ".join(command)  # the registry token goes in the environment, not argv
+        assert kwargs["env"]["DO_REGISTRY_TOKEN"] == "sekrit"  # type: ignore[index]
+        return Done()
+
+    monkeypatch.setattr(setup, "content_hash", lambda spec: "fff999")
+    monkeypatch.setattr(setup.subprocess, "run", run)
+    monkeypatch.setattr("builtins.input", lambda prompt: "y")
+    s = _setup_12(tmp_path, "DO_INCIDENT_HOST_IMAGE=registry.digitalocean.com/reg/commander:abc123\n"
+                            "DO_REGISTRY_TOKEN=sekrit\n", dry_run=False)
+    key, what, spec, name = setup.HOST_IMAGES[0]
+    assert s.host_image(key, what, spec, name) is True
+    assert calls[0][calls[0].index("--repository") + 1] == "registry.digitalocean.com/reg/commander"
+    assert s.env[key] == "registry.digitalocean.com/reg/commander:fff999"
+
+
+def test_host_mode_and_broker_in_a_dry_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    s = _setup_12(tmp_path, "DO_INCIDENT_BROKER_URL=http://127.0.0.1:8788\n")
+    assert s.host_mode() is False and s.broker() is False
+    assert any("DO_MICROVM_HOST_MODE=microvm" in item for item in s.todo)
+    assert any("cloudflared tunnel --url http://127.0.0.1:8788" in item for item in s.todo)
+    s = _setup_12(tmp_path, "DO_MICROVM_HOST_MODE=microvm\nDO_INCIDENT_BROKER_URL=https://a-b.trycloudflare.com \n")
+    assert s.host_mode() is True and s.broker() is True
+    out = capsys.readouterr().out
+    assert "new URL each time cloudflared starts" in out and "DO_INCIDENT_BROKER_URL" in s.unchecked

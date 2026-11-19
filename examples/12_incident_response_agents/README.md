@@ -184,6 +184,10 @@ passes them to the commander's host, which puts the key in that MicroVM; the spe
 
 ## Run (real mode)
 
+`uv run python scripts/setup_examples.py --examples 12` sets up what follows step by step: the tokens, the demo
+repository and the droplet as for example 09, `DO_MICROVM_HOST_MODE=microvm`, both images (rebuilt when their sources
+changed) and the broker URL (it prints the tunnel command and asks for the URL). `--dry-run` only checks. By hand:
+
 Set in `.env`: `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` (see the repository's README), `DO_MODEL_ACCESS_KEY`,
 `DO_ACTION_GATEWAY_TOKEN` (a [personal access token](https://docs.digitalocean.com/reference/api/create-personal-access-token/) authorized for Action Gateway; [quickstart](https://docs.digitalocean.com/products/managed-agents/action-gateway/quickstart/)) and `DO_ACTION_GATEWAY_ACTOR_ID` (the actor needs a DigitalOcean
 connection and a code-host connection that reads the repository's commits), and `DO_INCIDENT_REPO=owner/name`; leave
