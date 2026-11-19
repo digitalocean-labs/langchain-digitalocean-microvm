@@ -4,23 +4,23 @@ What DigitalOcean MicroVMs add as sandboxes for Deep Agents, from a single sandb
 
 01, 04, 05 and 07 are ports of labs of the [Deep Agents course](https://github.com/langchain-ai/lca-deepagents) that use sandboxes; each one's README names the lab. The others were written for this package: 02, 03 and 06 each show one feature (the `dcode` provider, subagent sandboxes, templates), and 08-12 are larger applications built on several of them.
 
-Each example has its own model setup, run commands and README.
+Each example has its own model setup, run commands and README; the README has the details the table leaves out.
 
 
 | Example | Min. MicroVMs | Also needed for the real run | Shows |
 | --- | --- | --- | --- |
-| [`01_quickstart`](01_quickstart) | 1 | sandbox image, model key | A deep agent whose filesystem and shell are a MicroVM; pause and resume keep its files |
+| [`01_quickstart`](01_quickstart) | 1 | sandbox image, model key | A deep agent in a MicroVM; pause and resume keep its files |
 | [`02_deepagents_code`](02_deepagents_code) | 1 | sandbox image, `dcode` (Python 3.12+) | `dcode --sandbox microvm` (Deep Agents Code) |
-| [`03_subagent_sandboxes`](03_subagent_sandboxes) | 2 per thread | sandbox image, model key | Synchronous subagents with one MicroVM each, created in parallel, paused between turns |
-| [`04_async_subagents`](04_async_subagents) | 2 | agent-host image built with `uv` and `crane`, pushed to your registry | Async subagents that run *inside* MicroVMs (Agent Server per host) behind an embedded gateway (experimental) |
-| [`05_data_analyst`](05_data_analyst) | 1 | sandbox image, model key | SQL and matplotlib charts in a MicroVM; the paused sandbox keeps the database and packages between runs |
-| [`06_warm_start`](06_warm_start) | 1 | sandbox image, model key | Sandbox templates: prepare once, checkpoint, clone new sandboxes in seconds |
-| [`07_sales_assistant`](07_sales_assistant) | 1 per thread | sandbox image, model key; optional Tavily key | A sales assistant with one MicroVM per conversation thread (template, seeded skills and database, mail MCP server), paused between turns |
-| [`08_board_pack`](08_board_pack) | 6 | sandbox image, model key | The Board Pack app: an orchestrator and six specialists, one MicroVM each, cloned from a template on demand (four in parallel, then two in series); live dashboard, LangSmith spans |
-| [`09_incident_response`](09_incident_response) | 4 per thread | sandbox image, model key, Action Gateway token with DigitalOcean and code-host connections, a public GitHub repository you own, a small billed droplet | An incident team: three investigator MicroVMs and a verifier MicroVM (cloned from a template, paused while a human decides), a remediator that alone can act; the restore of a real or simulated droplet is an Action Gateway approval, the delete is refused; live dashboard |
-| [`10_erasure`](10_erasure) | 4 per thread | sandbox image, model key (simulated systems) | An erasure request: four locator MicroVMs (cloned from a template, paused while a human decides) classify a person's records so the models see manifests only; Action Gateway approvals, evidence report, live dashboard |
-| [`11_vulnerability_response`](11_vulnerability_response) | 6 | sandbox image, model key (simulated systems) | A security lead and one analyst MicroVM per repository (cloned from a template, paused when done); patches re-tested in fresh MicroVMs; Action Gateway approvals; live dashboard |
-| [`12_incident_response_agents`](12_incident_response_agents) | 6 per incident | two images in your registry, everything example 09 needs, a public HTTPS URL for the relay's broker port (a tunnel is enough) | Example 09's incident handled by specialist agents, each a whole deep agent in a MicroVM agent host of its own with its own model: a commander with no action tools delegates to them as async sub-agents; every specialist reaches its Action Gateway actions through the relay's broker (a token per role and incident; no gateway token in any MicroVM); the Remediator proposes the restore, a human decides in the console or on an approvals page (`--web`), and the relay runs it |
+| [`03_subagent_sandboxes`](03_subagent_sandboxes) | 2 per thread | sandbox image, model key | One MicroVM per synchronous subagent, created in parallel |
+| [`04_async_subagents`](04_async_subagents) | 2 | agent-host image (`uv`, `crane`, your registry) | Async subagents inside MicroVMs behind an embedded gateway (experimental) |
+| [`05_data_analyst`](05_data_analyst) | 1 | sandbox image, model key | SQL and charts in a MicroVM; the paused sandbox keeps the database |
+| [`06_warm_start`](06_warm_start) | 1 | sandbox image, model key | Sandbox templates: checkpoint once, clone in seconds |
+| [`07_sales_assistant`](07_sales_assistant) | 1 per thread | sandbox image, model key; optional Tavily key | One MicroVM per conversation thread, paused between turns |
+| [`08_board_pack`](08_board_pack) | 6 | sandbox image, model key | An orchestrator and six specialists, one MicroVM each; live dashboard |
+| [`09_incident_response`](09_incident_response) | 4 per thread | sandbox image, model key, Action Gateway token, a public GitHub repository you own, a small billed droplet | An incident team of MicroVMs; the restore is an Action Gateway approval; live dashboard |
+| [`10_erasure`](10_erasure) | 4 per thread | sandbox image, model key | An erasure request: four locator MicroVMs; Action Gateway approvals; evidence report; live dashboard |
+| [`11_vulnerability_response`](11_vulnerability_response) | 6 | sandbox image, model key | A security lead and one analyst MicroVM per repository; Action Gateway approvals; live dashboard |
+| [`12_incident_response_agents`](12_incident_response_agents) | 6 per incident | two images in your registry, everything example 09 needs, a public HTTPS URL for the relay's broker port (a tunnel is enough) | Example 09's incident handled by specialist agents, each in a MicroVM agent host of its own; a human decides in the console or on an approvals page |
 
 The incident of examples 09 and 12 (the droplet, its service, the simulated world) is in [`incident_common`](incident_common).
 
