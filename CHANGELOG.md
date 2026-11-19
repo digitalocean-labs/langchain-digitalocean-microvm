@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+Supports `deepagents>=0.7.0,<0.8.0`. The Action Gateway tools use endpoints (breaking: names below); `scripts/setup_examples.py` sets up and checks the examples' real runs.
 
 **Breaking**
 
