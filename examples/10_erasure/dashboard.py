@@ -71,6 +71,15 @@ RECORD_STYLE = {  # record state -> style
 PLANNED = {"erase": "found", "redact": "found", "retain": "kept", "skip": "skipped"}
 
 
+OVERVIEW = Text(  # what the run is about, in the header
+    "A customer asks us to erase her personal data, held in five systems. A team of AI agents finds every "
+    "record, each search in a MicroVM of its own, and a human approves every change. Billing keeps its "
+    "invoices, so her billing details are cleared, not deleted; another person with the same name is left "
+    "alone. The agents then check it is gone and report. The systems are mocks.",
+    style="#5AB0FF", justify="center",
+)
+
+
 @dataclass
 class Tile:
     sandbox_id: str
@@ -312,7 +321,7 @@ def render(state: State, mode: str) -> Group:
         stats.append(f"   {waiting} waiting for a human", style="bold yellow")
     if state.api_error:
         stats.append(f"   API: {state.api_error}", style="red")
-    header = Panel(Group(Align.center(title), Align.center(stats)), border_style="#0069FF")
+    header = Panel(Group(Align.center(title), OVERVIEW, Align.center(stats)), border_style="#0069FF")
 
     grid = Table.grid(padding=(0, 1), expand=True)
     columns = len(ROLES)
@@ -361,7 +370,8 @@ def render(state: State, mode: str) -> Group:
     for ts, line in events[::-1]:
         log.add_row(Text(time.strftime("%H:%M:%S", time.localtime(ts)), style="dim"), Text(line))
     return Group(header, grid, systems_panel, gateway_panel,
-                 Panel(log, title="lifecycle", title_align="left", border_style="grey37", height=7))
+                 Panel(log, title="MicroVM lifecycle (cloned, resumed, paused, deleted)", title_align="left",
+                       border_style="grey37", height=7))
 
 
 def main() -> None:

@@ -35,8 +35,8 @@ export DO_MODEL_ACCESS_KEY=...                             # or EXAMPLES_MODEL p
 DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py   # a deep agent in a local directory
 ```
 
-`uv run examples/tour.py` runs examples 01 and 10 in local mode in a temporary directory (about a minute and a half, a few model calls;
-`--full` adds 03 and 06). `uv run python scripts/check_setup.py` says, per example, what your `.env` is missing (read-only; `--offline` checks
+`uv run examples/tour.py` runs example 11 with its live dashboard in local mode in a temporary directory (about 2 minutes; on macOS the
+dashboard opens in a window of its own, `--same-terminal` keeps it in this terminal; `--full` adds 01, 03, 06 and 10). `uv run python scripts/check_setup.py` says, per example, what your `.env` is missing (read-only; `--offline` checks
 the variables only, `--deep` also creates, uses and deletes one throwaway MicroVM); `uv run python scripts/setup_examples.py` sets up what is missing.
 
 In local mode the agent's shell

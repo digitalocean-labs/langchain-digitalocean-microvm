@@ -69,6 +69,15 @@ STYLE = {  # status -> (border, badge)
 BUSY = {"cloning", "creating", "resuming", "running", "pausing"}
 
 
+OVERVIEW = Text(  # what the run is about, in the header
+    "A checkout service on a server starts failing right after a deploy. A team of AI agents finds when "
+    "the errors began, which change went out and which snapshot of the server predates it. Nothing is "
+    "restored until a human approves, and a separate agent then checks that the service is healthy. The "
+    "investigators and the checker each work in a MicroVM of their own.",
+    style="#5AB0FF", justify="center",
+)
+
+
 @dataclass
 class Tile:
     sandbox_id: str
@@ -236,7 +245,7 @@ def render(state: State, mode: str) -> Group:
     )
     if state.api_error:
         stats.append(f"   API: {state.api_error}", style="red")
-    header = Panel(Group(Align.center(title), Align.center(stats)), border_style="#0069FF")
+    header = Panel(Group(Align.center(title), OVERVIEW, Align.center(stats)), border_style="#0069FF")
 
     grid = Table.grid(padding=(0, 1), expand=True)
     columns = len(ROLES)
@@ -283,7 +292,8 @@ def render(state: State, mode: str) -> Group:
                             Text(tone.upper(), style=f"bold {colors.get(tone, 'white')}"), Text(tool), Text(what, style="dim"))
     gateway_panel = Panel(gateway_log, title="Action Gateway", title_align="left", border_style="grey37", height=9)
     return Group(header, grid, droplet_panel, gateway_panel,
-                 Panel(log, title="lifecycle", title_align="left", border_style="grey37", height=7))
+                 Panel(log, title="MicroVM lifecycle (cloned, resumed, paused, deleted)", title_align="left",
+                       border_style="grey37", height=7))
 
 
 def main() -> None:
