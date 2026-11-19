@@ -562,6 +562,8 @@ class CommanderHost:
         self.on_cleanup: Any = None
         self.events: list[dict[str, Any]] = []  # the host's own event log (/incident/events)
         self.events_fail = False
+        self.lose_decision_answer = False  # the connection drops before the answer to /incident/decision ...
+        self.decision_taken = True  # ... after the host resumed the sub-agent (False: before it did)
         self.no_thread = False  # the host is up, the commander's thread is not created yet
 
     def track(self, task: str, role: str, status: str = "running") -> None:
@@ -582,7 +584,14 @@ class CommanderHost:
             return httpx.Response(200, json={"tasks": [v for v in self.views if v["task_id"] in asked]})
         if path == "/incident/decision":
             self.decisions.append(json.loads(request.content))
-            return httpx.Response(200, json={"run_id": "sub-run-1", "task": self.decisions[-1]["task"]})
+            task = self.decisions[-1]["task"]
+            if self.lose_decision_answer:
+                self.lose_decision_answer = False  # once
+                if self.decision_taken:  # the resumed run: the gateway follows it, the interrupt is answered
+                    self.views = [{**v, "live": "running", "run_id": "sub-run-1", "interrupts": []} if v["task_id"] == task else v
+                                  for v in self.views]
+                raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+            return httpx.Response(200, json={"run_id": "sub-run-1", "task": task})
         if path == "/incident/cleanup":
             self.cleaned += 1
             if self.on_cleanup is not None:
@@ -776,6 +785,67 @@ async def test_an_approval_waits_in_the_remediators_thread_and_the_decision_resu
     first = await anext(stream)
     await stream.aclose()
     assert first["agent"] == "remediator" and first["input"] == {"decision": "approve"}
+    await relay.close()
+
+
+def _remediator_waiting(relay_module, relay, host, world) -> list:
+    """The Remediator's restore, requested through a real broker on the simulated world and waiting for a human; returns the
+    endpoint's client (its `calls` are the actions run)."""
+    from langchain_digitalocean_microvm.integrations.action_gateway_local import (
+        LocalActionGatewayClient,
+    )
+
+    clients: list[LocalActionGatewayClient] = []
+
+    def client() -> LocalActionGatewayClient:
+        clients.append(LocalActionGatewayClient(actions=world.actions()))
+        return clients[-1]
+
+    relay.broker = relay_module.Broker(b"k" * 32, "https://broker.example", client, lambda incident: True)
+    arguments = {"ID": world.droplet_id, "ImageID": 1}
+    asked = relay.broker.answer("abcd1234", "remediator", {"op": "invoke", "tool": "digitalocean_restore-droplet",
+                                                           "arguments": arguments, "call": "call-1", "rationale": "the bad deploy"})
+    stop = {"id": "int-1", "value": {"type": "action_approval", **asked["approval"]}}
+    host.track("t-r", "remediator")
+    host.view("t-r", "remediator", "waiting", interrupts=[stop])
+    host.idle()
+    return clients
+
+
+async def test_a_decision_whose_answer_is_lost_after_the_host_took_it_goes_through(relay_world) -> None:
+    relay_module, relay, host = relay_world
+    await _started(relay, "abcd1234")
+    (endpoint,) = _remediator_waiting(relay_module, relay, host, relay.service)
+    await relay.refresh("abcd1234")
+    host.lose_decision_answer = True
+    assert await relay.decide("abcd1234", "int-1", "approve") == "sub-run-1"  # the resumed run, read back from the host
+    assert len(endpoint.calls) == 1 and len(host.decisions) == 1
+    assert relay.stories["abcd1234"]["decision"] == "approve" and relay.subruns["abcd1234"]["sub-run-1"]["task"] == "t-r"
+    with pytest.raises(relay_module.NotPending):
+        await relay.decide("abcd1234", "int-1", "approve")  # a second click
+    assert len(endpoint.calls) == 1 and len(host.decisions) == 1
+    relay.broker.close()
+    await relay.close()
+
+
+async def test_a_decision_whose_answer_is_lost_before_the_host_took_it_can_be_made_again(relay_world) -> None:
+    relay_module, relay, host = relay_world
+    await _started(relay, "abcd1234")
+    (endpoint,) = _remediator_waiting(relay_module, relay, host, relay.service)
+    await relay.refresh("abcd1234")
+    host.lose_decision_answer, host.decision_taken = True, False
+    app = relay_module.make_app(relay, operator_token="op")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://relay") as http:
+        auth = {"Authorization": "Bearer op"}
+        lost = await http.post("/incidents/abcd1234/decision", json={"interrupt_id": "int-1", "decision": "approve"}, headers=auth)
+        assert lost.status_code == 502 and "did not answer" in lost.json()["error"]
+        assert len(endpoint.calls) == 1  # the restore ran before the host was asked to resume the Remediator
+        detail = (await http.get("/incidents/abcd1234", headers=auth)).json()
+        assert [p["id"] for p in detail["pending"]] == ["int-1"]  # still waiting in the Remediator: offered again
+        again = await http.post("/incidents/abcd1234/decision", json={"interrupt_id": "int-1", "decision": "approve"}, headers=auth)
+        assert again.status_code == 202 and again.json()["run_id"] == "sub-run-1"
+    assert len(endpoint.calls) == 1 and len(host.decisions) == 2  # the broker gave its recorded outcome: nothing ran twice
+    relay.broker.close()
     await relay.close()
 
 

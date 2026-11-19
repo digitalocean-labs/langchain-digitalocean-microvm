@@ -436,6 +436,10 @@ class UnknownIncident(LookupError):
     """No host for this incident (never started, or deleted)."""
 
 
+class NoAnswer(Exception):
+    """The commander's host did not answer a decision, and the sub-agent still waits on it (or that could not be read)."""
+
+
 class NotPending(LookupError):
     """The approval is not waiting any more (decided, or the task moved on), or the thread is busy."""
 
@@ -1161,7 +1165,8 @@ class Relay:
     async def decide(self, incident: str, interrupt_id: str, decision: str, reason: str | None = None) -> str:
         """Settle an approval: the relay posts the decision to the gateway and, once approved, runs the action itself (the
         broker); then it resumes the sub-agent that waits on it (through the commander's gateway, which follows the new run),
-        whose repeated request reads the outcome. Returns that run's id."""
+        whose repeated request reads the outcome. Returns that run's id. When the host's answer is lost, the sub-agent's task
+        is read again: the run it follows, or NoAnswer when the approval still waits (it is offered again)."""
         if decision not in DECISIONS:
             raise ValueError(f"decision must be one of {', '.join(DECISIONS)}")
         if interrupt_id in self._decided:
@@ -1190,17 +1195,32 @@ class Relay:
                     log_event(event="relay", incident=incident, decision_failed=stop["task"], error=str(exc)[:300])
                     raise
             answer = {"decision": decision, "reason": reason} if reason else decision
+            waiting = next((v.get("run_id") for v in self.tasks.get(incident, []) if v["task_id"] == stop["task"]), None)
             client = await self._client(incident)
             try:
-                response = await client.http.client.post("/incident/decision", json={
-                    "thread": thread_id_for(incident), "task": stop["task"], "role": stop["role"],
-                    "interrupt_id": interrupt_id, "answer": answer, "tool": value.get("tool")})
+                try:
+                    response = await client.http.client.post("/incident/decision", json={
+                        "thread": thread_id_for(incident), "task": stop["task"], "role": stop["role"],
+                        "interrupt_id": interrupt_id, "answer": answer, "tool": value.get("tool")})
+                except httpx.TransportError as exc:
+                    # The connection dropped before the answer: the host may have resumed the sub-agent all the same. Its task
+                    # says which: the run it follows now, or the approval still waiting (offered again).
+                    resumed = await self._resumed_run(client, incident, stop, waiting)
+                    if resumed is None:
+                        self._decided.discard(interrupt_id)
+                        log_event(event="relay", incident=incident, decision_unanswered=stop["task"], error=str(exc)[:300])
+                        raise NoAnswer(f"the commander's host did not answer ({type(exc).__name__}); the approval is "
+                                       "offered again while the sub-agent waits on it") from exc
+                    log_event(event="relay", incident=incident, decision_answer_lost=stop["task"], run=resumed)
+                    response = None
+                    run_id = resumed
             finally:
                 await client.http.client.aclose()
-            if response.status_code >= 400:
-                self._decided.discard(interrupt_id)
-                raise NotPending(f"the sub-agent could not be resumed: {response.text[:300]}")
-            run_id = str(response.json().get("run_id"))
+            if response is not None:
+                if response.status_code >= 400:
+                    self._decided.discard(interrupt_id)
+                    raise NotPending(f"the sub-agent could not be resumed: {response.text[:300]}")
+                run_id = str(response.json().get("run_id"))
         self.subruns.setdefault(incident, {})[run_id] = {"task": stop["task"], "role": stop["role"], "decision": decision}
         self.pending[incident] = [s for s in self.pending.get(incident, []) if s["id"] != interrupt_id]
         self.seen[incident] = {**self.seen.get(incident, {}), "pending": len(self.pending[incident])}
@@ -1212,6 +1232,22 @@ class Relay:
         self.watch(incident)
         log_event(event="relay", incident=incident, resumed=stop["task"], run=run_id)
         return run_id
+
+    async def _resumed_run(self, client: LangGraphClient, incident: str, stop: dict[str, Any], waiting: str | None) -> str | None:
+        """The sub-agent's run after a decision whose answer was lost: its task no longer waits on the approval and follows a
+        run other than `waiting`. None when it still waits, or when its task could not be read."""
+        try:
+            response = await reread(lambda: client.http.client.get(
+                "/incident/tasks", params={"thread": thread_id_for(incident), "tasks": f"{stop['task']}:{stop['role']}"}))
+            response.raise_for_status()
+            views = response.json().get("tasks") or []
+        except (httpx.HTTPError, ValueError):
+            return None
+        view = next((v for v in views if isinstance(v, dict) and v.get("task_id") == stop["task"]), None)
+        if (view is None or not view.get("run_id") or view["run_id"] == waiting
+                or any(i.get("id") == stop["id"] for i in view.get("interrupts") or [])):
+            return None
+        return str(view["run_id"])
 
     async def message(self, incident: str, text: str) -> str:
         """Another turn on the commander's thread, when it is idle."""
@@ -1488,6 +1524,8 @@ def make_app(relay: Relay, *, operator_token: str = "", page: str | None = None)
                                         str(body.get("decision", "")), body.get("reason") or None)
         except ValueError as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
+        except NoAnswer as exc:
+            return JSONResponse({"error": str(exc)}, status_code=502)
         return JSONResponse({"run_id": run_id}, status_code=202)
 
     async def messages(request: Request) -> JSONResponse:
