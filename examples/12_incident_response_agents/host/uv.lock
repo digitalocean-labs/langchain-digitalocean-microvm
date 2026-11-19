@@ -940,7 +940,7 @@ wheels = [
 
 [[package]]
 name = "langchain-digitalocean-microvm"
-version = "0.1.0"
+version = "0.2.0"
 source = { directory = "../../../" }
 dependencies = [
     { name = "deepagents" },
@@ -970,7 +970,7 @@ provides-extras = ["agent-host"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "deepagents-code", marker = "python_full_version >= '3.12'" },
+    { name = "deepagents-code", marker = "python_full_version >= '3.12'", specifier = ">=0.1" },
     { name = "fastmcp", specifier = ">=4" },
     { name = "langchain-anthropic" },
     { name = "langchain-quickjs", specifier = ">=0.3.8" },
@@ -997,7 +997,7 @@ lint = [
     { name = "ruff", specifier = ">=0.15" },
 ]
 test = [
-    { name = "deepagents-code", marker = "python_full_version >= '3.12'" },
+    { name = "deepagents-code", marker = "python_full_version >= '3.12'", specifier = ">=0.1" },
     { name = "langchain-tests", specifier = ">=1.1.9" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "python-dotenv" },
