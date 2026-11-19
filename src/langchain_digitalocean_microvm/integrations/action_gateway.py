@@ -49,7 +49,7 @@ from langchain_digitalocean_microvm.config import TRANSPORT_ENV, env_value
 API_URL = "https://api.digitalocean.com/v2/action-gateway"
 DATA_URL = "https://actions.do-ai.run"
 # The data plane is the origin of the endpoint's returned `mcp_url`, accepted only on these domains.
-DATA_DOMAINS = ("do-ai.run",)
+DATA_DOMAINS = ("do-ai.run", "do-ai-test.run")
 ENDPOINT_PREFIX = "microvm-ag-"
 DEFAULT_RATIONALE = "Requested by the agent"
 CONNECT_LINK = re.compile(r"https://cloud\.digitalocean\.com/security/connectlinks/confirm[^\s\"'<>)\\]*")

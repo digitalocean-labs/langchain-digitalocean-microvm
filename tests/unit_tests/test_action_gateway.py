@@ -325,6 +325,24 @@ def test_an_mcp_url_off_the_gateway_domains_is_refused_and_the_endpoint_deleted(
     assert (seen[-1].method, seen[-1].url.path) == ("DELETE", "/v2/action-gateway/endpoints/abc")
 
 
+@pytest.mark.parametrize("url", ["https://sfo3.actions.do-ai.run/mcp/endpoint/abc",
+                                 "https://actions.do-ai-test.run/mcp/endpoint/abc"])
+def test_an_mcp_url_on_a_gateway_domain_names_the_data_plane(monkeypatch, url: str):
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.method == "POST" and request.url.path == "/v2/action-gateway/endpoints":
+            return httpx.Response(201, json={"endpoint": {"id": "abc"}, "mcp_url": url})
+        return httpx.Response(200, json={"results": [{"result": {"status": "success", "output": "ok"}}]})
+
+    monkeypatch.delenv("DO_ACTION_GATEWAY_DATA_URL", raising=False)
+    client = _client(handler)
+    assert client.create_endpoint("microvm-ag-1", ["t"], {}, None) == "abc"
+    client.invoke("abc", "t", {}, "why")
+    assert seen[-1].url.host == httpx.URL(url).host
+
+
 def test_data_url_takes_every_call_and_the_mcp_url_is_not_checked(monkeypatch):
     seen: list[httpx.Request] = []
 
