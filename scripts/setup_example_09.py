@@ -129,8 +129,8 @@ SECRETS = (
 )
 BROADER_CHECK = ("DO_MICROVM_API_TOKEN", "DO_MICROVM_ACCESS_TOKEN", "DO_ACTION_GATEWAY_TOKEN")
 BROADER_WARNING = ("accepted, and it can also read droplets or the account: it has more scopes than this setup needs "
-                   "(Full Access, Read Only or extra custom scopes). A token with only the scopes named limits what a "
-                   "leaked .env can do")
+                   "(Full Access, Read Only or extra custom scopes). Create it with only the scopes named to limit what "
+                   "it can do")
 # Reads none of these tokens needs; a 200 on either means more scopes than the setup asks for (Full Access included).
 UNNEEDED_READS = (f"{API}/droplets", f"{API}/account")
 MICROVMS_NEEDED = 5  # what a run holds at once, the template's builder included (scripts/check_setup.py)
