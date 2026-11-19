@@ -29,8 +29,14 @@ DigitalOcean account, so most changes need nothing else.
 
 Live runs need DigitalOcean credentials in a `.env` at the repository root (copy `.env.example`;
 `.env` is gitignored) and create real MicroVMs. Check that the team has room first, and clean up
-afterwards: `uv run scripts/delete_all.py` (dry run unless `--yes`, then asks you to confirm)
-deletes the MicroVMs and checkpoints you created with this package in your namespace (`DO_MICROVM_NAMESPACE`;
+afterwards:
+
+```bash
+uv run scripts/delete_all.py         # dry run: lists what it would delete
+uv run scripts/delete_all.py --yes   # deletes, after asking you to confirm
+```
+
+`delete_all.py` deletes the MicroVMs and checkpoints you created with this package in your namespace (`DO_MICROVM_NAMESPACE`;
 `--all-owners`: other users' in that namespace too; `--all-namespaces`: every user's on the team);
 sandbox templates are shared and are kept unless `--include-templates` (which also needs `--all-owners`). Paused MicroVMs count against the
 team's limit.

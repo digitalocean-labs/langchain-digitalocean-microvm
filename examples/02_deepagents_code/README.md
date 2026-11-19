@@ -45,7 +45,11 @@ ANTHROPIC_API_KEY=$DO_MODEL_ACCESS_KEY ANTHROPIC_BASE_URL=https://inference.do-a
 > run: the MicroVM stays `running` until it pauses itself after
 > `DO_MICROVM_IDLE_TIMEOUT`, and paused MicroVMs still count against your team's
 > limit. Reuse one sandbox with `--sandbox-id <id>` (dcode never deletes those),
-> and remove leftovers with `uv run scripts/delete_all.py --yes`.
+> and remove leftovers:
+>
+> ```bash
+> uv run scripts/delete_all.py --yes
+> ```
 
 The provider (`langchain_digitalocean_microvm.integrations.deepagents_code`)
 accepts dcode's sandbox id or the MicroVM id, and supports `seed_files` and
