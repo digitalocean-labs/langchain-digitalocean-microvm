@@ -105,7 +105,7 @@ from incident_common.events import log_event
 from incident_common.sandbox import verdict as verdict_rules
 from incident_common.world import DROPLET_NAME
 from langgraph_sdk.client import LangGraphClient
-from langgraph_sdk.errors import ConflictError
+from langgraph_sdk.errors import ConflictError, NotFoundError
 from roles import (
     BROKERED,
     BY_NAME,
@@ -1008,7 +1008,10 @@ class Relay:
             client = await self._client(incident)
             thread_id = thread_id_for(incident)
             try:
-                thread = await reread(lambda: client.threads.get(thread_id))
+                try:
+                    thread = await reread(lambda: client.threads.get(thread_id))
+                except NotFoundError:  # the host is up, `start` has not created the thread yet: nothing to read
+                    return True
                 state = await reread(lambda: client.threads.get_state(thread_id))
                 values = state.get("values") or {}
                 tracked = values.get("async_tasks") or {}
@@ -1105,8 +1108,12 @@ class Relay:
         client = await self._client(incident)
         thread_id = thread_id_for(incident)
         try:
-            state = await reread(lambda: client.threads.get_state(thread_id))
-            runs = await reread(lambda: client.runs.list(thread_id, limit=1))  # the newest first
+            try:
+                state = await reread(lambda: client.threads.get_state(thread_id))
+                runs = await reread(lambda: client.runs.list(thread_id, limit=1))  # the newest first
+            except NotFoundError:  # the host is up, `start` has not created the thread yet
+                return {"incident": incident, "thread_id": thread_id, "status": "starting", "pending": [], "run": None,
+                        "last_message": "", "tasks": [], "story": public_story(new_story(), "starting", 0)}
         finally:
             await client.http.client.aclose()
         pending = [dict(stop) for stop in self.pending.get(incident, [])]
@@ -1212,7 +1219,10 @@ class Relay:
             client = await self._client(incident)
             thread_id = thread_id_for(incident)
             try:
-                thread = await reread(lambda: client.threads.get(thread_id))
+                try:
+                    thread = await reread(lambda: client.threads.get(thread_id))
+                except NotFoundError as exc:  # the host is up, `start` has not created the thread yet
+                    raise NotPending("the incident is still starting: wait for it first") from exc
                 if thread.get("status") == "busy" or await _active_run(client, thread_id):
                     raise NotPending("the commander is working: wait for it first")
                 run_id = await start_run(client, thread_id, text=text)

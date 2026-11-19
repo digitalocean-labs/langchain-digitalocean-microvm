@@ -13,6 +13,10 @@
 - `scripts/smoke_action_gateway.py --slug-version` is optional (default: no pin).
 - `scripts/grep_gate.sh` reads extra patterns from an untracked `.grep_gate_extra` (or `GREP_GATE_EXTRA`) and checks them in addition to its built-in ones.
 
+**Fixed**
+
+- Example 12 relay: an incident read between its commander's host coming up and the thread being created answers with status `starting` (`GET /incidents/<id>`) or a 409 (a message), not a 500.
+
 ## 0.1.0
 
 First release. Supports `deepagents>=0.7.0,<0.8.0`.
