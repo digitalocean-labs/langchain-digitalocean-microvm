@@ -12,7 +12,8 @@ starts with recommendations (a team or namespace of its own, token expiry, a spe
    and writes it to `.env` (mode 0600). Checked: the control token lists MicroVMs; the access token cannot create
    MicroVMs (an empty create request, which creates nothing, is refused with 403); the model key can call both
    models example 09 uses; the Action Gateway token reads the tool catalog. A DigitalOcean token that can also read
-   droplets or the account (Full Access, Read Only, or extra custom scopes) is refused. The control token then
+   droplets or the account (Full Access, Read Only, or extra custom scopes) is reported as broader than needed; a
+   pasted one is saved only if you confirm, one already in `.env` is kept with the warning. The control token then
    reports the team's MicroVM limit against what a run holds.
 2. `DO_ACTION_GATEWAY_ACTOR_ID`, asked for when unset.
 3. `DO_MICROVM_IMAGE`: kept when set; otherwise built with scripts/build_sandbox_image.py into your DigitalOcean
@@ -127,6 +128,9 @@ SECRETS = (
            "Custom Scopes: every action_gateway scope", check_gateway),
 )
 BROADER_CHECK = ("DO_MICROVM_API_TOKEN", "DO_MICROVM_ACCESS_TOKEN", "DO_ACTION_GATEWAY_TOKEN")
+BROADER_WARNING = ("accepted, and it can also read droplets or the account: it has more scopes than this setup needs "
+                   "(Full Access, Read Only or extra custom scopes). A token with only the scopes named limits what a "
+                   "leaked .env can do")
 # Reads none of these tokens needs; a 200 on either means more scopes than the setup asks for (Full Access included).
 UNNEEDED_READS = (f"{API}/droplets", f"{API}/account")
 MICROVMS_NEEDED = 5  # what a run holds at once, the template's builder included (scripts/check_setup.py)
@@ -134,8 +138,8 @@ MICROVMS_NEEDED = 5  # what a run holds at once, the template's builder included
 RECOMMENDATIONS = f"""Before you start
 - Use a DigitalOcean team of its own for examples, or set DO_MICROVM_NAMESPACE (1-16 lowercase letters or digits),
   so these MicroVMs, the droplet and the clean-up scripts stay apart from other work on the team.
-- Give each token a short expiration; a run takes minutes. Full Access and Read Only tokens are refused: create
-  each one with Custom Scopes, exactly the scopes named.
+- Give each token a short expiration; a run takes minutes. Create each one with Custom Scopes, exactly the scopes
+  named; a token with more (Full Access, Read Only or extra scopes) is reported, and you choose whether to keep it.
 - Set a spend threshold on the model access key (a spend alert on Managed Access Keys (Serverless Inference)).
 - The team needs room for {MICROVMS_NEEDED} MicroVMs at once (paused ones count); the limit is checked below.
 - The droplet and its snapshot are billed until `uv run examples/incident_common/setup_droplet.py --cleanup`;
@@ -256,14 +260,12 @@ class Setup:
     def confirm(self, prompt: str) -> bool:
         return self.ask(f"{prompt} (y/N)").lower() in ("y", "yes")
 
-    def checked(self, secret: Secret, value: str) -> str | None:
-        """None when `value` works for `secret` and has no scope this setup does not need."""
-        if problem := secret.check(value, self.env):
-            return problem
-        if secret.key in BROADER_CHECK and broader_than_needed(value):
-            return ("this token can also read droplets or the account (Full Access, Read Only or extra scopes); "
-                    "create one with only the scopes named")
-        return None
+    def broader(self, secret: Secret, value: str) -> bool:
+        """True (after a warning) when a DigitalOcean token has scopes this setup does not need; using it is your choice."""
+        if secret.key not in BROADER_CHECK or not broader_than_needed(value):
+            return False
+        self.say("warn", secret.key, BROADER_WARNING)
+        return True
 
     # ── steps ─────────────────────────────────────────────────────────────────
     def prerequisites(self, *, repo: bool, droplet: bool) -> bool:
@@ -314,9 +316,10 @@ class Setup:
         ok = True
         for secret in SECRETS:
             value = self.env.get(secret.key, "")
-            problem = self.checked(secret, value) if value else "not set"
+            problem = secret.check(value, self.env) if value else "not set"
             if problem is None:
-                self.say("ok", secret.key, "accepted")
+                if not self.broader(secret, value):
+                    self.say("ok", secret.key, "accepted")
                 continue
             self.say("need", secret.key, problem)
             if self.dry_run:
@@ -329,7 +332,9 @@ class Setup:
                 if not value:
                     ok = False
                     break
-                if (problem := self.checked(secret, value)) is None:
+                if (problem := secret.check(value, self.env)) is None:
+                    if self.broader(secret, value) and not self.confirm("       keep this token anyway?"):
+                        continue
                     self.save(secret.key, value)
                     self.say("ok", secret.key, f"accepted, saved to {self.env_file.name}")
                     break

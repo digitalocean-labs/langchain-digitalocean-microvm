@@ -91,16 +91,33 @@ def test_dry_run_changes_nothing(api: dict[tuple[str, str], int], tmp_path: Path
 
 
 @pytest.mark.parametrize("extra", ["/droplets", "/account"])
-def test_broader_tokens_refused_and_never_printed(api: dict[tuple[str, str], int], tmp_path: Path,
-                                                 capsys: pytest.CaptureFixture[str], extra: str) -> None:
+def test_broader_token_in_env_warned_not_failed(api: dict[tuple[str, str], int], tmp_path: Path,
+                                               capsys: pytest.CaptureFixture[str], extra: str) -> None:
     api[("/microvms", "sekrit-control")] = 200
     api[(extra, "sekrit-control")] = 200  # Full Access, Read Only or an extra scope
     env_file = tmp_path / ".env"
     env_file.write_text("DO_MICROVM_API_TOKEN=sekrit-control\nDO_MODEL_ACCESS_KEY=model\n")
-    assert setup.main(["--dry-run", "--env-file", str(env_file)]) == 1
+    s = setup.Setup(env_file, dry_run=True)
+    s.tokens()
     out = capsys.readouterr().out
     assert "sekrit" not in out
-    assert "[need] DO_MICROVM_API_TOKEN: this token can also read droplets or the account" in out
+    assert "[warn] DO_MICROVM_API_TOKEN: accepted, and it can also read droplets or the account" in out
+    assert not any("control token" in item for item in s.todo)  # kept: a warning, not a missing token
+
+
+@pytest.mark.parametrize(("keep", "saved"), [("y", True), ("", False)])
+def test_pasted_broader_token_saved_only_when_confirmed(api: dict[tuple[str, str], int], tmp_path: Path,
+                                                       monkeypatch: pytest.MonkeyPatch, keep: str, saved: bool) -> None:
+    api[("/microvms", "full")] = 200
+    api[("/droplets", "full")] = 200
+    pasted = iter(["full", ""])  # the broader token, then an empty answer (skip)
+    monkeypatch.setattr(setup.getpass, "getpass", lambda prompt: next(pasted))
+    monkeypatch.setattr("builtins.input", lambda prompt: keep)
+    monkeypatch.setattr(setup, "SECRETS", setup.SECRETS[:1])  # the control token only
+    env_file = tmp_path / ".env"
+    s = setup.Setup(env_file, dry_run=False)
+    assert s.tokens() is saved
+    assert (s.env.get("DO_MICROVM_API_TOKEN") == "full") is saved
 
 
 def test_missing_tool_stops_before_any_prompt(api: dict[tuple[str, str], int], tmp_path: Path,
