@@ -79,6 +79,8 @@ another file.
 
 ## Real MicroVMs
 
+`uv run python scripts/setup_examples.py` sets up the variables below step by step; `--dry-run` only checks. By hand:
+
 ```bash
 # .env
 DO_MICROVM_API_TOKEN=...                             # microvm:create/read/update/delete
