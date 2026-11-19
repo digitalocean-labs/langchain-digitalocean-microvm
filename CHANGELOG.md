@@ -16,6 +16,7 @@
 **Fixed**
 
 - Example 12 approvals page: one log read per incident at a time, and a gateway or decision row already shown is not added again. An approval whose decision is in flight keeps its buttons disabled through redraws; they are enabled again only when the decision was refused or failed.
+- Example 12 relay: an incident read between its commander's host coming up and the thread being created answers with status `starting` (`GET /incidents/<id>`) or a 409 (a message), not a 500.
 
 ## 0.1.0
 
