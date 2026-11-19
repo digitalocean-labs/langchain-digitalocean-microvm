@@ -217,8 +217,8 @@ The commander picks the newest snapshot that predates the deploy.
 Commander on `anthropic-claude-4.6-sonnet`, investigators and verifier on `anthropic-claude-haiku-4.5`, with the real Action
 Gateway; `run_script.py --approve --delete` answers the approval itself, so there is no waiting for a human.
 
-- **One-off setup:** `setup_droplet.py` (droplet, service, snapshot) takes a couple of minutes, and `prepare.py` builds
-  the template once.
+- **One-off setup:** `setup_droplet.py` (droplet, service, snapshot) takes a couple of minutes and is required in real mode. The
+  template is built once, by `prepare.py` or by the first run if `prepare.py` was not run.
 - **Bad deploy to detection:** `/metrics` needs three failing minutes before the alert fires.
 - **Alert to the approval** is the investigators' work; each investigator's MicroVM is cloned from the
   template (in parallel) when it gets work, and paused afterwards.

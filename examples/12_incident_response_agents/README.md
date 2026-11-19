@@ -214,7 +214,11 @@ Set `DO_INCIDENT_BROKER_URL` to the URL it prints. The tunnel exposes the broker
 answers) then passes through the tunnel's provider. For anything longer-lived, run the relay where it has a public HTTPS
 address of its own, and treat that place like one that holds credentials (it holds the gateway token).
 
+A real run needs the incident's Droplet first: run the setup once (droplet, service and snapshot; a couple of minutes).
+`--deploy-bad` and `--verify-restore` read the state file it writes.
+
 ```bash
+uv run examples/incident_common/setup_droplet.py                              # one-off setup, a couple of minutes
 uv run examples/incident_common/setup_droplet.py --deploy-bad                 # the failure starts
 uv run examples/12_incident_response_agents/console.py demo --web --delete       # or --approve: no human
 uv run examples/12_incident_response_agents/relay.py serve                    # or a relay for other approvers (DO_INCIDENT_OPERATOR_TOKEN, DO_INCIDENT_RELAY_SECRET)
