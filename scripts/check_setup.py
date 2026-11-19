@@ -277,12 +277,13 @@ def render(report: Report, *, local: bool) -> str:
         mark = {True: "ok  ", False: "FAIL", None: "--  "}[line.ok]
         out.append(f"[{mark}] {line.what}: {line.detail}")
     out.append("")
-    out.append(f"{'Example':<34} {'MicroVMs':>8}  Status")
-    for example, status, missing in report.examples:
-        label = f"{example.number} {example.name}" + (" [own setup]" if example.maintainer else "")
+    labels = [f"{e.number} {e.name}" + (" [own setup]" if e.maintainer else "") for e, _, _ in report.examples]
+    width = max([len("Example"), *map(len, labels)])
+    out.append(f"{'Example':<{width}} {'MicroVMs':>8}  Status")
+    for label, (example, status, missing) in zip(labels, report.examples, strict=True):
         tail = "" if not missing else ": " + "; ".join(missing)
         extra = f" (also needs {example.setup})" if status == "ready*" else ""
-        out.append(f"{label:<34} {example.microvms:>8}  {status}{tail}{extra}")
+        out.append(f"{label:<{width}} {example.microvms:>8}  {status}{tail}{extra}")
     out.append("")
     out.append("MicroVMs: what a run holds at once (paused ones count against the team's limit); keep that many free. "
                "`ready*`: the real run also needs what is named.")

@@ -6,6 +6,10 @@
 
 - Action Gateway: the client sends an endpoint's calls to the `mcp_url` host only when it is an `https` host on `do-ai.run` or `do-ai-test.run`. With `DO_ACTION_GATEWAY_DATA_URL` (or `data_url=`) set, every call goes to that host and the `mcp_url` is not checked.
 
+**Fixed**
+
+- `scripts/check_setup.py`: the per-example table's first column is as wide as the longest example label.
+
 ## 0.2.0
 
 Supports `deepagents>=0.7.0,<0.8.0`. The Action Gateway tools use endpoints (breaking: names below); `scripts/setup_examples.py` sets up and checks the examples' real runs.
