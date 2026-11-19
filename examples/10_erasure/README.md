@@ -210,11 +210,18 @@ Three things differ from `run_script.py`:
 - **Nothing deletes the MicroVMs.** With real MicroVMs, a thread's four MicroVMs stay paused when its run ends (there
   is no `--delete`); delete them with `scripts/delete_all.py` (see above) when you are done.
 
-**LangSmith**: set `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY` and `LANGSMITH_PROJECT` in `.env`; `run_script.py`
-and `langgraph dev` both read them, and `prepare.py` reports whether tracing is on. Each run on a thread is a trace
-of its own (the request, the resume after each answer, the follow-up), grouped in LangSmith under the thread's id. A
-trace shows the coordinator, each locator's `task` as a nested run with its tool calls, and a `MicroVM clone` (or
-`MicroVM resume`) span where a locator first uses its MicroVM.
+**LangSmith**: set the variables in `.env`:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=...
+```
+
+- `run_script.py` and `langgraph dev` both read them, and `prepare.py` reports whether tracing is on.
+- Each run on a thread is a trace of its own (the request, the resume after each answer, the follow-up), grouped in LangSmith under the thread's id.
+- A trace shows the coordinator, each locator's `task` as a nested run with its tool calls, and a `MicroVM clone` (or `MicroVM resume`) span where a task first uses its MicroVM.
 
 ## Kept, redacted, skipped
 

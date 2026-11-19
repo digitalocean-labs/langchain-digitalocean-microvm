@@ -183,12 +183,18 @@ hosts get `EXAMPLES_MODEL` (`EXAMPLES_STRONG_MODEL` for the commander and the Ch
 You do not start `langgraph dev` yourself here: the relay and the commander start the hosts, and `host/` and
 `specialists/` are their templates, not a graph to serve by hand.
 
-**LangSmith**: set `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY` and `LANGSMITH_PROJECT` in `.env`. In local mode each
-host is a process of this machine that inherits the console's environment, so the commander and every specialist are
-traced, each host's runs as traces of their own. In real mode a host is a MicroVM whose environment holds only the
-variables the relay and the commander set (`host_env` in `relay.py`, `role_env` in `agent.py`), and those leave the
-LangSmith variables out: nothing in the MicroVMs is traced. `DO_MICROVM_SUBAGENT_ENV_PASSTHROUGH=LANGSMITH_TRACING,LANGSMITH_API_KEY,LANGSMITH_PROJECT`
-passes them to the commander's host, which puts the key in that MicroVM; the specialists' hosts do not get them.
+**LangSmith**: set the variables in `.env`:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=...
+```
+
+- **Local mode:** each host is a process of this machine that inherits the console's environment, so the commander and every specialist are traced, each host's runs as traces of their own.
+- **Real mode:** a host is a MicroVM whose environment holds only the variables the relay and the commander set (`host_env` in `relay.py`, `role_env` in `agent.py`), and those leave the LangSmith variables out: nothing in the MicroVMs is traced.
+- **Passthrough:** `DO_MICROVM_SUBAGENT_ENV_PASSTHROUGH=LANGSMITH_TRACING,LANGSMITH_API_KEY,LANGSMITH_PROJECT` passes them to the commander's host, which puts the key in that MicroVM; the specialists' hosts do not get them.
 
 ## Run (real mode)
 
@@ -263,11 +269,12 @@ uv run examples/incident_common/setup_droplet.py --cleanup
 `scripts/delete_all.py` lists and deletes what a killed run left behind (the commander's host and the specialists' hosts).
 
 The relay creates one Remediator endpoint per incident, named `microvm-ag-<incident>-remediator-<hex>`, and deletes it when it
-closes the incident, after the hosts. When it starts, it also deletes those of every incident whose commander host its store
-records as deleted (a run killed while closing, or hosts deleted by `scripts/delete_all.py`). A killed relay leaves its
-endpoints: the open incidents' Remediator endpoints, and its own, named `microvm-ag-<hex>` (one for the approver's facts and
-one per role the broker served). A Remediator endpoint of an incident that was never closed stays until a relay closes that
-incident. Delete leftovers through the Action Gateway API (`GET /v2/action-gateway/endpoints`, `DELETE /v2/action-gateway/endpoints/{id}`).
+closes the incident, after the hosts.
+
+- When it starts, it also deletes those of every incident whose commander host its store records as deleted (a run killed while closing, or hosts deleted by `scripts/delete_all.py`).
+- A killed relay leaves its endpoints: the open incidents' Remediator endpoints, and its own, named `microvm-ag-<hex>` (one for the approver's facts and one per role the broker served).
+- A Remediator endpoint of an incident that was never closed stays until a relay closes that incident.
+- Delete leftovers through the Action Gateway API (`GET /v2/action-gateway/endpoints`, `DELETE /v2/action-gateway/endpoints/{id}`).
 
 ## The relay's routes
 
@@ -291,11 +298,10 @@ and `/policy` needs `Authorization: Bearer <DO_INCIDENT_OPERATOR_TOKEN>` (whoeve
 | `GET /policy` | The actions each role holds, and the Remediator's policy |
 
 **Hosts while they work.** A MicroVM is idle when it gets no inbound requests, even while it works, and is then paused.
-While an incident has work open, the relay reads its tasks through the commander's host every 3 seconds, and its gateway
-polls the specialists' hosts, so neither is paused mid-run; a specialist's host pauses a minute after its run ends (the
-Remediator's while a human decides), and the decision resumes it. The relay records the commander hosts, their tokens and
-each incident's latest run in the package's gateway store, so a restarted relay picks the open incidents up again.
-`scripts/gc_microvms.py` knows the commander hosts too.
+
+- While an incident has work open, the relay reads its tasks through the commander's host every 3 seconds, and its gateway polls the specialists' hosts, so neither is paused mid-run.
+- A specialist's host pauses a minute after its run ends (the Remediator's while a human decides), and the decision resumes it.
+- The relay records the commander hosts, their tokens and each incident's latest run in the package's gateway store, so a restarted relay picks the open incidents up again. `scripts/gc_microvms.py` knows the commander hosts too.
 
 ## The approvals page
 
