@@ -13,6 +13,10 @@
 - `scripts/smoke_action_gateway.py --slug-version` is optional (default: no pin).
 - `scripts/grep_gate.sh` reads extra patterns from an untracked `.grep_gate_extra` (or `GREP_GATE_EXTRA`) and checks them in addition to its built-in ones.
 
+**Fixed**
+
+- Example 12 relay: when the commander's host answer to a decision is lost (the connection drops), the relay reads the sub-agent's task again. If the host took the decision, the decision stands and its run id is returned; if the approval still waits, `POST /incidents/<id>/decision` answers 502 and the approval is offered again (the broker returns its recorded outcome, so a second decision runs nothing again).
+
 ## 0.1.0
 
 First release. Supports `deepagents>=0.7.0,<0.8.0`.
