@@ -24,6 +24,7 @@
 
 **Fixed**
 
+- `scripts/setup_examples.py`: before it asks to replace the demo repository's commits, it checks that the `gh` login can push to the repository, and a failed push shows git's reason. A rebuild that does not happen (no push access, a confirmation that does not match, a failed push) keeps a repository that passes its check, and the run continues. A step the run does not reach because an earlier one did not finish (the droplet, the final `check_setup.py`) is reported as skipped, with the step that stopped it, and added to the to-do list.
 - Example 12 approvals page: one log read per incident at a time, and a gateway or decision row already shown is not added again. An approval whose decision is in flight keeps its buttons disabled through redraws; they are enabled again only when the decision was refused or failed.
 - Example 12 relay: an incident read between its commander's host coming up and the thread being created answers with status `starting` (`GET /incidents/<id>`) or a 409 (a message), not a 500.
 - Example 12 relay: when the commander's host answer to a decision is lost (the connection drops), the relay reads the sub-agent's task again. If the host took the decision, the decision stands and its run id is returned; if the approval still waits, `POST /incidents/<id>/decision` answers 502 and the approval is offered again (the broker returns its recorded outcome, so a second decision runs nothing again).
