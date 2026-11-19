@@ -128,6 +128,10 @@ agent-chat-ui, see [Run with `langgraph dev`](#run-with-langgraph-dev-studio-age
 
 ## Run (real mode)
 
+`uv run python scripts/setup_example_09.py` sets up everything below step by step: it lists the commands it needs, asks for
+each token (with the page and the scopes), checks it, writes `.env`, builds the image, creates the demo repository with `gh`
+and runs `setup_droplet.py` and `prepare.py`. `--dry-run` only checks what is set and creates nothing. The steps by hand:
+
 Set in `.env`: `DO_MICROVM_API_TOKEN`, `DO_MICROVM_IMAGE` (see the repository's README), `DO_MODEL_ACCESS_KEY`,
 `DO_ACTION_GATEWAY_TOKEN` (a [personal access token](https://docs.digitalocean.com/reference/api/create-personal-access-token/) authorized for Action Gateway; [quickstart](https://docs.digitalocean.com/products/managed-agents/action-gateway/quickstart/)), `DO_ACTION_GATEWAY_ACTOR_ID`, and `DO_INCIDENT_REPO=owner/name`;
 leave `DO_MICROVM_TRANSPORT` unset. The actor needs a DigitalOcean connection (the droplet) and a code-host connection
