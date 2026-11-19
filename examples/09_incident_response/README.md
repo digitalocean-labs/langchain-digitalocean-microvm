@@ -197,14 +197,17 @@ uv run examples/incident_common/setup_droplet.py --cleanup          # deletes th
 ```
 
 `incident_common/setup_droplet.py` works through an Action Gateway endpoint of its own, so it creates in the account the actor's
-DigitalOcean connection belongs to: one droplet `checkout-svc` (`s-1vcpu-1gb` in `sfo2`, Ubuntu, tag `incident-example`; `DO_INCIDENT_SIZE` and `DO_INCIDENT_REGION` choose another where that size is not offered),
-one ssh key `incident-key` (a temporary key pair under `incident_common/outputs/`) and, once the service is installed, one snapshot
-`checkout-svc-snapshot`. The gateway's `droplet-create` takes no first-boot script, so the service is installed over ssh: the
-droplet clones your repository and runs `incident_common/service/app.py`; a deploy is a `git checkout` and a restart. The snapshot is taken
-with the droplet shut down and the droplet is then powered on again, so the image the restore uses is a consistent disk.
-What it creates is recorded in `incident_common/outputs/incident.json`, and the droplet's address and id go to `incident_common/outputs/incident.env`, which
-the other scripts load. `--cleanup` deletes the droplet, the snapshot and the key; the droplet and the snapshot are billed
-until then.
+DigitalOcean connection belongs to:
+
+- one droplet `checkout-svc` (`s-1vcpu-1gb` in `sfo2`, Ubuntu, tag `incident-example`; `DO_INCIDENT_SIZE` and `DO_INCIDENT_REGION` choose another where that size is not offered);
+- one ssh key `incident-key` (a temporary key pair under `incident_common/outputs/`);
+- once the service is installed, one snapshot `checkout-svc-snapshot`, taken with the droplet shut down (the droplet is then powered on again), so the image the restore uses is a consistent disk.
+
+The gateway's `droplet-create` takes no first-boot script, so the service is installed over ssh: the droplet clones your
+repository and runs `incident_common/service/app.py`; a deploy is a `git checkout` and a restart. What the script creates is
+recorded in `incident_common/outputs/incident.json`, and the droplet's address and id go to
+`incident_common/outputs/incident.env`, which the other scripts load. `--cleanup` deletes the droplet, the snapshot and the
+key; the droplet and the snapshot are billed until then.
 
 The template's checkpoint is kept for the next run (it does not count against the team limit). `delete_all.py`
 lists and deletes the MicroVMs a killed run left behind:
@@ -250,11 +253,18 @@ Three things differ from `run_script.py`:
 - **Nothing deletes the MicroVMs.** With real MicroVMs, a thread's MicroVMs stay paused when its run ends (there is
   no `--delete`); delete them with `scripts/delete_all.py` (see above) when you are done.
 
-**LangSmith**: set `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY` and `LANGSMITH_PROJECT` in `.env`; `run_script.py`
-and `langgraph dev` both read them, and `prepare.py` reports whether tracing is on. Each run on a thread is a trace
-of its own (the alert, the resume after your answer, the follow-up), grouped in LangSmith under the thread's id. A
-trace shows the commander, each subagent's `task` as a nested run with its tool calls, and a `MicroVM clone` (or
-`MicroVM resume`) span where a subagent first uses its MicroVM.
+**LangSmith**: set the variables in `.env`:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=...
+```
+
+- `run_script.py` and `langgraph dev` both read them, and `prepare.py` reports whether tracing is on.
+- Each run on a thread is a trace of its own (the alert, the resume after your answer, the follow-up), grouped in LangSmith under the thread's id.
+- A trace shows the commander, each subagent's `task` as a nested run with its tool calls, and a `MicroVM clone` (or `MicroVM resume`) span where a task first uses its MicroVM.
 
 ## Why a restore, and what the tools take
 
