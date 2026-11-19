@@ -309,7 +309,10 @@ def test_an_endpoint_it_did_not_create_is_looked_up_and_data_url_overrides(monke
 
 
 @pytest.mark.parametrize("url", ["http://actions.do-ai.run/mcp/endpoint/abc", "https://actions.example.com/mcp/endpoint/abc",
-                                 "https://do-ai.run.example.com/mcp", "https://actions.example.run/mcp/endpoint/abc"])
+                                 "https://do-ai.run.example.com/mcp", "https://actions.example.run/mcp/endpoint/abc",
+                                 "http://actions.do-ai-test.run/mcp/endpoint/abc",
+                                 "https://do-ai-test.run.example.com/mcp/endpoint/abc",
+                                 "https://evil-do-ai-test.run/mcp/endpoint/abc"])
 def test_an_mcp_url_off_the_gateway_domains_is_refused_and_the_endpoint_deleted(monkeypatch, url: str):
     seen: list[httpx.Request] = []
 
