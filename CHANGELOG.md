@@ -16,7 +16,7 @@ Supports `deepagents>=0.7.0,<0.8.0`. The Action Gateway tools use endpoints (bre
 
 - Examples 09 and 12: the incident's droplet is named `checkout-svc` and its snapshot `checkout-svc-snapshot` (`incident_common/world.py`, `setup_droplet.py`); the snapshot's name does not say which state it holds, so the Infra Analyst picks it by its date. A droplet and snapshot created with the earlier names keep them until `setup_droplet.py --cleanup` and a new setup.
 - `setup_droplet.py --deploy-bad` and `--verify-restore` exit with a message to run the setup first when its state file is missing. The example 12 README lists the setup step before `--deploy-bad`; the READMEs of examples 09, 10 and 11 say the first run builds the template when `prepare.py` was not run.
-- Tool slugs need no version: a slug without `@version` gets the released one. The examples' policies and tool lists no longer pin versions; `name@version` still pins one.
+- Tool slugs need no version: the package sends a slug without `@version` as it is, and `name@version` pins one. The examples' policies and tool lists name tools without a version.
 - `scripts/check_setup.py --deep` calls one read-only action through a throwaway `microvm-ag-check-*` endpoint and deletes it.
 - `scripts/smoke_action_gateway.py --slug-version` is optional (default: no pin).
 - `scripts/grep_gate.sh` reads extra patterns from an untracked `.grep_gate_extra` (or `GREP_GATE_EXTRA`) and checks them in addition to its built-in ones.

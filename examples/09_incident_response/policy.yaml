@@ -1,6 +1,6 @@
 # The incident commander's Action Gateway policy (gateway.py loads it with ActionPolicy.from_yaml).
 # Three tiers; anything not listed is denied.
-# Tool names carry no version: the gateway uses the released one (name@version pins one).
+# Tool names carry no version; name@version pins one.
 allow:                                # the investigators read
   - github_list_commits
   - github_compare_commits
