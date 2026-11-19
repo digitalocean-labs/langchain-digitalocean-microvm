@@ -329,8 +329,9 @@ which creates the endpoint with its first version: tools, policy and actor; data
 `mcp_url`, `actions.do-ai.run`, with `X-Endpoint-Id`). The module imports nothing else from this package.
 
 - **The data plane comes from the service.** The client takes the host from the `mcp_url` the create answers with and
-  accepts only `https` on `do-ai.run` / `do-ai-test.run`, so a token is never sent to a host the answer names elsewhere;
-  an endpoint it did not create is looked up (`GET /endpoints/{id}`) once. `DO_ACTION_GATEWAY_DATA_URL` overrides it.
+  accepts only `https` on `do-ai.run`, so a token is never sent to a host the answer names elsewhere; an endpoint it
+  did not create is looked up (`GET /endpoints/{id}`) once. `DO_ACTION_GATEWAY_DATA_URL` sends every call to the host
+  it names instead.
 - **Slugs need no version.** The client sends a tool without `@version` as it is, and the examples name tools that
   way; `name@version` pins one. An endpoint the service refuses (for example over a pinned version) is not created, and
   the examples' `prepare.py` reports the service's answer.
