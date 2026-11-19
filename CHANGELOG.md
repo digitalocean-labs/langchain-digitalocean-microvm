@@ -17,6 +17,8 @@
 - `scripts/check_setup.py --deep` calls one read-only action through a throwaway `microvm-ag-check-*` endpoint and deletes it.
 - `scripts/smoke_action_gateway.py --slug-version` is optional (default: no pin).
 - `scripts/grep_gate.sh` reads extra patterns from an untracked `.grep_gate_extra` (or `GREP_GATE_EXTRA`) and checks them in addition to its built-in ones.
+- Example 12's broker logs the arguments, the exception type and the last call frames when a gateway call raises, so a 502 "needs the relay's gateway actor to connect an account first" can be traced to the call that raised it.
+- Example 12's relay logs one `settle` event when it stops reading an incident whose specialists' hosts were still awake: `paused` (every host read as paused) or `limit` (the read window ended first), with each role's tile status and `since`.
 
 **Fixed**
 
