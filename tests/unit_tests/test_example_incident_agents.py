@@ -359,6 +359,36 @@ def test_each_role_gets_an_allow_only_endpoint_with_its_own_actions(broker) -> N
     assert len(clients) == 2  # one endpoint per role
 
 
+def test_a_read_answered_not_connected_is_sent_again_once_and_its_text_reaches_the_specialist(broker, monkeypatch) -> None:
+    relay_module, broker, _open, _clients, _world = broker
+    monkeypatch.setattr(relay_module, "CONNECT_RETRY_SECONDS", 0.0)
+
+    class Gateway:
+        def __init__(self, answers: list[Any]) -> None:
+            self.answers, self.requests = answers, 0
+
+        def request(self, tool: str, arguments: dict, rationale: str) -> Any:
+            self.requests += 1
+            return self.answers.pop(0)
+
+        def close(self) -> None:
+            pass
+
+    body = {"op": "invoke", "tool": "digitalocean_droplet-get", "arguments": {"ID": 424242}}
+    gateway = Gateway(["Not connected: open https://example.test/connect", '{"droplet": {"id": 424242}}'])
+    broker._gateways["infra"] = gateway
+    assert json.loads(broker.answer("abcd1234", "infra", body)["text"])["droplet"]["id"] == 424242
+    assert gateway.requests == 2
+    gateway = Gateway(["Not connected: open https://example.test/connect"] * 2)
+    broker._gateways["infra"] = gateway
+    assert broker.answer("abcd1234", "infra", body)["text"].startswith("Not connected")  # a text, not a 502
+    assert gateway.requests == 2  # one resend
+    broker._gateways["infra"] = Gateway([object()])  # a PendingApproval: the read-only roles' endpoints ask for nothing
+    with pytest.raises(relay_module.BrokerRefused) as refused:
+        broker.answer("abcd1234", "infra", body)
+    assert refused.value.status == 502
+
+
 def test_the_broker_keeps_the_reads_to_the_incidents_repository_and_droplet(broker) -> None:
     relay_module, _plain, _open, clients, world = broker
     from langchain_digitalocean_microvm.integrations.action_gateway_local import (
