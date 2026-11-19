@@ -221,6 +221,7 @@ def test_dry_run_ready_when_everything_checks(api: dict[tuple[str, str], int], t
     monkeypatch.setattr(setup, "verify_repo", lambda repo: (True, "demo"))
     monkeypatch.setattr(setup, "verify_image", lambda image, token: (True, "found"))
     monkeypatch.setattr(setup, "verify_droplet", lambda: (True, "healthy"))
+    monkeypatch.setattr(setup, "verify_connections", lambda token, actor: (True, "active DigitalOcean and GitHub"))
     monkeypatch.setattr(setup.Setup, "prerequisites", lambda self, **_: True)
     env_file = tmp_path / ".env"
     env_file.write_text("DO_MICROVM_API_TOKEN=control\nDO_MICROVM_ACCESS_TOKEN=access\nDO_MODEL_ACCESS_KEY=model\n"
@@ -229,7 +230,7 @@ def test_dry_run_ready_when_everything_checks(api: dict[tuple[str, str], int], t
     assert setup.main(["--dry-run", "--examples", "09", "--env-file", str(env_file)]) == 0
     out = capsys.readouterr().out
     assert "Ready: every read-only check passed" in out
-    assert "[--  ] DO_ACTION_GATEWAY_ACTOR_ID" in out and "prepare.py, full run" in out
+    assert "[ok  ] DO_ACTION_GATEWAY_ACTOR_ID me: active" in out and "prepare.py, full run" in out
     assert setup.main(["--dry-run", "--env-file", str(env_file)]) == 0  # the base is ready too
     capsys.readouterr()
     monkeypatch.setattr(setup, "verify_droplet", lambda: (False, "the service does not answer"))
@@ -328,7 +329,9 @@ def test_host_image_build_keeps_its_repository(tmp_path: Path, monkeypatch: pyte
     assert s.env[key] == "registry.digitalocean.com/reg/commander:fff999"
 
 
-def test_host_mode_and_broker_in_a_dry_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_host_mode_and_broker_in_a_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                          capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(setup, "verify_broker", lambda url: (True, "answers 502"))
     s = _setup_12(tmp_path, "DO_INCIDENT_BROKER_URL=http://127.0.0.1:8788\n")
     assert s.host_mode() is False and s.broker() is False
     assert any("DO_MICROVM_HOST_MODE=microvm" in item for item in s.todo)
@@ -336,4 +339,64 @@ def test_host_mode_and_broker_in_a_dry_run(tmp_path: Path, capsys: pytest.Captur
     s = _setup_12(tmp_path, "DO_MICROVM_HOST_MODE=microvm\nDO_INCIDENT_BROKER_URL=https://a-b.trycloudflare.com \n")
     assert s.host_mode() is True and s.broker() is True
     out = capsys.readouterr().out
-    assert "new URL each time cloudflared starts" in out and "DO_INCIDENT_BROKER_URL" in s.unchecked
+    assert "answers 502" in out and not s.unchecked
+
+
+def _connections(pages: list[list[dict[str, str]]], monkeypatch: pytest.MonkeyPatch, status: int = 200) -> None:
+    total = sum(len(p) for p in pages)
+
+    def get(url: str, *, params: dict[str, int], **_: object) -> _Response:
+        assert url.endswith("/action-gateway/connections")
+        return _Response(status, {"connections": pages[params["page"] - 1], "pagination": {"total": total}})
+
+    monkeypatch.setattr(httpx, "get", get)
+
+
+def test_verify_connections(monkeypatch: pytest.MonkeyPatch) -> None:
+    do = {"user_id": "me", "provider": "digitalocean", "status": "active"}
+    gh = {"user_id": "me", "provider": "github", "status": "active"}
+    _connections([[do], [gh]], monkeypatch)  # two pages
+    assert setup.verify_connections("gw", "me") == (True, "active DigitalOcean and GitHub connections")
+    _connections([[do, {**gh, "status": "pending"}]], monkeypatch)
+    ok, detail = setup.verify_connections("gw", "me")
+    assert ok is False and "no active GitHub connection for me" in detail and "GitHub is pending" in detail
+    _connections([[do, gh]], monkeypatch)
+    assert setup.verify_connections("gw", "someone-else")[0] is False  # another actor's connections do not count
+    _connections([[]], monkeypatch, status=403)
+    assert setup.verify_connections("gw", "me")[0] is None
+
+
+def test_missing_connection_fails_the_dry_run_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                   capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(setup, "check_gateway", lambda token, env: None)
+    monkeypatch.setattr(setup, "verify_connections", lambda token, actor: (False, "no active GitHub connection for me"))
+    env = "DO_ACTION_GATEWAY_TOKEN=gw\nDO_ACTION_GATEWAY_ACTOR_ID=me\n"
+    dry = _setup_12(tmp_path, env)
+    assert dry.actor() is False and any("connect link" in item for item in dry.todo)
+    full = _setup_12(tmp_path, env, dry_run=False)
+    assert full.actor() is True  # the next gateway call shows the connect link
+    assert "shows the connect link" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("resolves", "answer", "ok", "detail"), [
+    (False, 200, False, "does not resolve"),
+    (True, 530, False, "answers 530"),
+    (True, 502, True, "once the relay runs"),
+    (True, 404, True, "answers 404"),
+    (True, None, False, "no answer"),
+])
+def test_verify_broker(monkeypatch: pytest.MonkeyPatch, resolves: bool, answer: int | None, ok: bool, detail: str) -> None:
+    def getaddrinfo(host: str, port: int) -> list[object]:
+        if not resolves:
+            raise setup.socket.gaierror("no such host")
+        return [object()]
+
+    def get(url: str, **_: object) -> _Response:
+        if answer is None:
+            raise httpx.ConnectTimeout("timed out")
+        return _Response(answer)
+
+    monkeypatch.setattr(setup.socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(httpx, "get", get)
+    got_ok, got_detail = setup.verify_broker("https://a-b.trycloudflare.com")
+    assert got_ok is ok and detail in got_detail

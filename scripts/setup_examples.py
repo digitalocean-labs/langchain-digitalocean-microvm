@@ -26,7 +26,8 @@ starts with recommendations (a team or namespace of its own, token expiry, a spe
 - `DO_MICROVM_IMAGE`: kept when set; otherwise built with scripts/build_sandbox_image.py into your DigitalOcean
   Container Registry. The registry token is passed to the build in its environment and is written to `.env` only if
   you say so.
-- 09: `DO_ACTION_GATEWAY_ACTOR_ID`, asked for when unset. `DO_INCIDENT_REPO`: a public GitHub repository of your own
+- 09: `DO_ACTION_GATEWAY_ACTOR_ID`, asked for when unset, and the actor's connections (a read-only list): an active
+  DigitalOcean and GitHub connection each; a missing one is shown with where its connect link appears. `DO_INCIDENT_REPO`: a public GitHub repository of your own
   (through the `gh` CLI and its login), filled with examples/incident_common/service/make_demo_repo.sh. An existing
   repository is overwritten only after you type its name; `--refresh-repo` rebuilds it (the change analyst reports the
   commit's age, so rebuild it shortly before a run). The droplet: examples/incident_common/setup_droplet.py, which shows
@@ -37,18 +38,19 @@ starts with recommendations (a team or namespace of its own, token expiry, a spe
   specialists' images (`DO_INCIDENT_HOST_IMAGE`, `DO_INCIDENT_SPECIALISTS_IMAGE`), built with images/agent-host/build_image.py --spec into
   the same registry; a set image is checked against its sources (its tag is the content hash build_image.py computes
   locally with --no-push) and rebuilt when they differ. `DO_INCIDENT_BROKER_URL`: the script prints the tunnel
-  command and asks for the https URL; it does not start the tunnel. Action Gateway endpoints named `microvm-ag-*` left
-  by earlier runs are counted (read-only).
+  command and asks for the https URL; it does not start the tunnel. A set URL is checked with one GET: a name that
+  does not resolve, no answer or a 530 fails; any other answer passes, a 502, 503 or 504 included (the relay does
+  not run during setup). Action Gateway endpoints named `microvm-ag-*` (a running relay's, or left by earlier runs)
+  are counted (read-only).
 - Last: scripts/check_setup.py for the selected examples.
 
 What is already set is checked, not only looked up: the image's manifest (crane; with DO_REGISTRY_TOKEN for a
 DigitalOcean registry), the repository (public, the demo's two commits and service/app.py), the droplet's service
-(`/health`), 12's images (their tags against their sources). A full run treats a failed check as missing and offers to redo that step.
+(`/health`), the actor's connections, 12's images (their tags against their sources) and its broker URL. A full run treats a failed check as missing and offers to redo that step.
 
 `--dry-run` runs only the read-only checks, creates nothing (no MicroVM, endpoint, droplet or repository) and exits 0
-when everything it can check passes; it lists what only the full run checks (for 09: the actor, the template and a
-gateway endpoint with the example's tools, through prepare.py; for 12: the broker URL, which answers only while the
-relay and the tunnel run). Nothing secret is printed or passed on a command line.
+when everything it can check passes; it lists what only the full run checks (for 09: the template and a gateway
+endpoint with the example's tools, through prepare.py). Nothing secret is printed or passed on a command line.
 The full run requires a terminal (the values are typed in).
 """
 
@@ -61,12 +63,14 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 from _env import DEFAULT_ENV_FILE, add_env_file_argument
@@ -322,6 +326,56 @@ def verify_image(image: str, registry_token: str | None) -> Verdict:
     return True, "found (linux/amd64)"
 
 
+INCIDENT_PROVIDERS = {"digitalocean": "DigitalOcean", "github": "GitHub"}  # the actor's accounts 09 and 12 use
+
+
+def verify_connections(token: str, actor: str) -> Verdict:
+    """The actor has an active DigitalOcean and GitHub connection (a read of the token user's connections)."""
+    connections: list[dict[str, object]] = []
+    page = 1
+    try:
+        while page <= 20:
+            response = httpx.get(f"{API}/action-gateway/connections", headers={"Authorization": f"Bearer {token}"},
+                                 params={"page": page, "per_page": 100}, timeout=15.0)
+            if response.status_code != 200:
+                return None, f"{actor}; its connections not listed ({response.status_code})"
+            body = response.json()
+            connections += body.get("connections") or []
+            if len(connections) >= int((body.get("pagination") or {}).get("total") or 0) or not body.get("connections"):
+                break
+            page += 1
+    except (httpx.HTTPError, ValueError) as exc:
+        return None, f"{actor}; its connections not listed: {exc}"
+    mine = [c for c in connections if c.get("user_id") == actor]
+    active = {c.get("provider") for c in mine if c.get("status") == "active"}
+    missing = [name for slug, name in INCIDENT_PROVIDERS.items() if slug not in active]
+    if not missing:
+        return True, f"active {' and '.join(INCIDENT_PROVIDERS.values())} connections"
+    other = {str(c.get("provider")): str(c.get("status")) for c in mine if c.get("provider") in INCIDENT_PROVIDERS
+             and c.get("status") != "active"}
+    states = "".join(f"; {INCIDENT_PROVIDERS[p]} is {s}" for p, s in other.items())
+    return False, f"no active {' or '.join(missing)} connection for {actor}{states}"
+
+
+def verify_broker(url: str) -> Verdict:
+    """One GET of the broker URL. Fails when the name does not resolve, nothing answers, or the answer is 530; a 502,
+    503 or 504 passes (the relay is not running during setup), and so does any other answer."""
+    host = urlparse(url).hostname or ""
+    try:
+        socket.getaddrinfo(host, 443)
+    except (socket.gaierror, UnicodeError):
+        return False, "the name does not resolve: start the tunnel and set the URL it prints"
+    try:
+        status = httpx.get(url, timeout=10.0).status_code
+    except httpx.HTTPError as exc:
+        return False, f"no answer ({type(exc).__name__}): start the tunnel and set the URL it prints"
+    if status == 530:
+        return False, "answers 530: start the tunnel and set the URL it prints"
+    if status in (502, 503, 504):
+        return True, f"answers {status}; the broker answers once the relay runs"
+    return True, f"answers {status}"
+
+
 def verify_droplet() -> Verdict:
     """The droplet's service answers /health (healthy, or failing after --deploy-bad)."""
     url = dotenv_values(DROPLET_ENV).get("DO_INCIDENT_URL") if DROPLET_ENV.exists() else None
@@ -480,19 +534,25 @@ class Setup:
 
     def actor(self) -> bool:
         self.heading(f"Action Gateway actor ({self.plan.incident_label})")
-        if actor := self.env.get("DO_ACTION_GATEWAY_ACTOR_ID"):
-            self.verdict("DO_ACTION_GATEWAY_ACTOR_ID", (None, f"{actor}; not checked here (setup_droplet.py and prepare.py "
-                                                              "call the gateway as this actor)"), "")
-            return True
-        if self.dry_run:
-            self.todo.append("set DO_ACTION_GATEWAY_ACTOR_ID (the part of your DigitalOcean email before the @)")
-            return False
-        actor = self.ask("       DO_ACTION_GATEWAY_ACTOR_ID (the part of your DigitalOcean email before the @)")
+        actor = self.env.get("DO_ACTION_GATEWAY_ACTOR_ID", "")
         if not actor:
-            return False
-        self.save("DO_ACTION_GATEWAY_ACTOR_ID", actor)
-        self.say("ok", "DO_ACTION_GATEWAY_ACTOR_ID", actor)
-        return True
+            if self.dry_run:
+                self.todo.append("set DO_ACTION_GATEWAY_ACTOR_ID (the part of your DigitalOcean email before the @)")
+                return False
+            actor = self.ask("       DO_ACTION_GATEWAY_ACTOR_ID (the part of your DigitalOcean email before the @)")
+            if not actor:
+                return False
+            self.save("DO_ACTION_GATEWAY_ACTOR_ID", actor)
+        token = self.env.get("DO_ACTION_GATEWAY_TOKEN", "")
+        verdict = (verify_connections(token, actor) if token and check_gateway(token, self.env) is None
+                   else (None, f"{actor}; its connections not listed: the Action Gateway token is not accepted"))
+        ok = self.verdict(f"DO_ACTION_GATEWAY_ACTOR_ID {actor}", verdict,
+                          f"connect {actor}'s missing accounts: setup_droplet.py shows the connect link on its first call")
+        if ok is False and not self.dry_run:
+            # Not a stop: the first gateway call that needs the account shows its connect link (setup_droplet.py, the run).
+            self.say("warn", "connections", "the next gateway call that needs the account shows the connect link")
+            return True
+        return ok is not False
 
     def image(self) -> bool:
         self.heading("Sandbox image")
@@ -701,15 +761,14 @@ class Setup:
         port = self.env.get("DO_INCIDENT_BROKER_PORT") or "8788"
         tunnel = f"cloudflared tunnel --url http://127.0.0.1:{port}"
         url = self.env.get("DO_INCIDENT_BROKER_URL", "").strip()
-        if url and url.startswith("https://"):
-            quick = ("; a quick tunnel (trycloudflare.com) gets a new URL each time cloudflared starts: set it again then"
-                     if "trycloudflare.com" in url else "")
-            self.verdict("DO_INCIDENT_BROKER_URL", (None, f"{url}; it answers only while the relay and the tunnel run "
-                                                          f"(the relay uses it){quick}"), "")
-            return True
-        self.say("need", "DO_INCIDENT_BROKER_URL", "not https" if url else "not set")
         hint = (f"start a tunnel to the broker port, `{tunnel}` (cloudflared: {CLOUDFLARED_PAGE}), and set "
                 "DO_INCIDENT_BROKER_URL to the https URL it prints")
+        if url and url.startswith("https://"):
+            ok = self.verdict(f"DO_INCIDENT_BROKER_URL {url}", verify_broker(url), hint)
+            if ok is not False or self.dry_run:
+                return ok is not False
+        else:
+            self.say("need", "DO_INCIDENT_BROKER_URL", "not https" if url else "not set")
         if self.dry_run:
             self.todo.append(hint)
             return False
@@ -718,11 +777,10 @@ class Setup:
         if not url.startswith("https://"):
             return False
         self.save("DO_INCIDENT_BROKER_URL", url)
-        self.say("ok", "DO_INCIDENT_BROKER_URL", url)
-        return True
+        return self.verdict(f"DO_INCIDENT_BROKER_URL {url}", verify_broker(url), hint) is not False
 
     def leftovers(self) -> None:
-        """Action Gateway endpoints an earlier relay left (read-only; the README says how to delete them)."""
+        """Action Gateway endpoints named microvm-ag-*: a running relay's, or left by earlier runs (read-only)."""
         from langchain_digitalocean_microvm.integrations.action_gateway import (
             ActionGatewayClient,
             ActionGatewayError,
@@ -737,10 +795,11 @@ class Setup:
         finally:
             client.close()
         if left:
-            self.say("warn", "gateway endpoints", f"{len(left)} named microvm-ag-* from earlier runs; a relay deletes those "
-                     "of closed incidents when it starts, the others as the README describes (Run (real mode))")
+            self.say("warn", "gateway endpoints", f"{len(left)} named microvm-ag-*: a running relay's, or left by earlier "
+                     "runs; a relay deletes those of closed incidents when it starts, the others as the README describes "
+                     "(Run (real mode))")
         else:
-            self.say("ok", "gateway endpoints", "none left from earlier runs")
+            self.say("ok", "gateway endpoints", "none named microvm-ag-*")
 
     def transport(self) -> bool:
         if self.env.get("DO_MICROVM_TRANSPORT", "").lower() != "local":

@@ -80,7 +80,6 @@ import secrets
 import sys
 import threading
 import time
-import traceback
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
@@ -161,6 +160,7 @@ BROKER_BODY_LIMIT = 64 * 1024  # bytes of a broker request
 BROKER_RATE = 60  # requests per minute per role and incident: an agent in a loop is stopped here, not at the gateway
 BROKER_KEY_FILE = HERE / "outputs" / "broker.key"
 RATIONALE_LIMIT = 500
+CONNECT_RETRIES, CONNECT_RETRY_SECONDS = 1, 3.0  # times a read answered "Not connected" is sent again, and the seconds before each
 
 
 class SignatureError(ValueError):
@@ -666,14 +666,17 @@ class Broker:
             if str(arguments.get(name, "")).lower() != str(wanted).lower():
                 raise BrokerRefused(403, f"{tool}: {name} must be {wanted!r}, the incident's own")
         rationale = str(body.get("rationale") or f"the {role} specialist of incident {incident}")[:RATIONALE_LIMIT]
-        try:
-            text = gateway.call(tool, arguments, rationale)
-        except RuntimeError as exc:  # the gateway wanted a decision or a connection: an interrupt, outside a graph here
-            frames = [f"{Path(f.filename).name}:{f.lineno} {f.name}" for f in traceback.extract_tb(exc.__traceback__)[-4:]]
-            log_event(event="broker", incident=incident, role=role, tool=tool, status="error", arguments=arguments,
-                      error=f"{type(exc).__name__}: {str(exc)[:300]}", frames=frames)
-            raise BrokerRefused(502, f"{tool} needs the relay's gateway actor to connect an account first") from exc
-        status = "error" if text.startswith("Error:") else "allow"
+        answered = gateway.request(tool, arguments, rationale)
+        for _ in range(CONNECT_RETRIES):
+            if not (isinstance(answered, str) and answered.startswith("Not connected")):
+                break
+            log_event(event="broker", incident=incident, role=role, tool=tool, status="retry", error=answered[:300])
+            time.sleep(CONNECT_RETRY_SECONDS)
+            answered = gateway.request(tool, arguments, rationale)
+        if not isinstance(answered, str):  # an approval: a read-only role's endpoint allows its actions and asks for nothing
+            raise BrokerRefused(502, f"{tool} asked for an approval, which the {role} role's endpoint does not use")
+        text = answered
+        status = "error" if text.startswith(("Error:", "Not connected")) else "allow"
         log_event(event="broker", incident=incident, role=role, tool=tool, status=status, arguments=arguments,
                   error=text[:300] if status == "error" else "")
         return {"text": text}
