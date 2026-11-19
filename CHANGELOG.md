@@ -1,12 +1,18 @@
 # Changelog
 
+## Unreleased
+
+**Changed**
+
+- Action Gateway: the client sends an endpoint's calls to the `mcp_url` host only when it is an `https` host on `do-ai.run`. With `DO_ACTION_GATEWAY_DATA_URL` (or `data_url=`) set, every call goes to that host and the `mcp_url` is not checked.
+
 ## 0.2.0
 
 Supports `deepagents>=0.7.0,<0.8.0`. The Action Gateway tools use endpoints (breaking: names below); `scripts/setup_examples.py` sets up and checks the examples' real runs.
 
 **Breaking**
 
-- Action Gateway tools use endpoints instead of sessions: `ActionGateway` creates an endpoint with its tools and policy (`POST /v2/action-gateway/endpoints`) and calls it with `X-Endpoint-Id` on the data plane the endpoint's `mcp_url` names (only `https` hosts on `do-ai.run` / `do-ai-test.run`; `DO_ACTION_GATEWAY_DATA_URL` or `data_url=` overrides). Renamed: `session_prefix=` to `endpoint_prefix=`, `session_id` to `endpoint_id`, `SESSION_PREFIX` to `ENDPOINT_PREFIX`, `ActionGatewayClient.list_sessions` / `delete_session` to `list_endpoints` / `delete_endpoint`, and `GatewayClient.create_session` / `delete_session` to `create_endpoint` / `delete_endpoint` (custom clients must rename them). `LocalActionGatewayClient` follows.
+- Action Gateway tools use endpoints instead of sessions: `ActionGateway` creates an endpoint with its tools and policy (`POST /v2/action-gateway/endpoints`) and calls it with `X-Endpoint-Id` on the data plane the endpoint's `mcp_url` names (an `https` host on `do-ai.run`; `DO_ACTION_GATEWAY_DATA_URL` or `data_url=` overrides). Renamed: `session_prefix=` to `endpoint_prefix=`, `session_id` to `endpoint_id`, `SESSION_PREFIX` to `ENDPOINT_PREFIX`, `ActionGatewayClient.list_sessions` / `delete_session` to `list_endpoints` / `delete_endpoint`, and `GatewayClient.create_session` / `delete_session` to `create_endpoint` / `delete_endpoint` (custom clients must rename them). `LocalActionGatewayClient` follows.
 
 **Added**
 
