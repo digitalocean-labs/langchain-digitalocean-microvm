@@ -400,3 +400,80 @@ def test_verify_broker(monkeypatch: pytest.MonkeyPatch, resolves: bool, answer: 
     monkeypatch.setattr(httpx, "get", get)
     got_ok, got_detail = setup.verify_broker("https://a-b.trycloudflare.com")
     assert got_ok is ok and detail in got_detail
+
+
+def _gh_run(push_allowed: bool, *, login: str = "clupa-do"):  # noqa: ANN202 - a fake _run for the repo step
+    def run(command: list[str]) -> str | None:
+        if command[:3] == ["gh", "api", "user"]:
+            return login
+        if command[:3] == ["gh", "repo", "view"]:
+            return "PUBLIC"
+        if command[:2] == ["gh", "api"] and command[-1] == ".permissions.push":
+            return "true" if push_allowed else "false"
+        if command[0] == "bash":
+            return "built"
+        return None
+    return run
+
+
+def _repo_setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answers: list[str], *, valid: bool = True) -> setup.Setup:
+    replies = iter(answers)
+    monkeypatch.setattr("builtins.input", lambda prompt: next(replies))
+    monkeypatch.setattr(setup, "verify_repo", lambda repo: (True, "demo") if valid else (False, "not the demo"))
+    env_file = tmp_path / ".env"
+    env_file.write_text("DO_INCIDENT_REPO=calinlupa/checkout-incident-demo\n")
+    return setup.Setup(env_file, setup.Plan.of(("09",)), dry_run=False)
+
+
+def test_refresh_without_push_access_keeps_a_valid_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                        capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(setup, "_run", _gh_run(push_allowed=False))
+    monkeypatch.setattr(setup.subprocess, "run", lambda *a, **k: pytest.fail("pushed"))
+    s = _repo_setup(tmp_path, monkeypatch, [""])  # Enter: the repository already set
+    assert s.repo(refresh=True) is True
+    out = capsys.readouterr().out
+    assert "the gh login clupa-do cannot push to calinlupa/checkout-incident-demo" in out and "kept as it is" in out
+    s = _repo_setup(tmp_path, monkeypatch, [""], valid=False)
+    assert s.repo(refresh=True) is False  # nothing valid to keep
+    assert "[FAIL] DO_INCIDENT_REPO" in capsys.readouterr().out
+
+
+def test_refresh_with_a_mismatched_confirmation_keeps_a_valid_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                   capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(setup, "_run", _gh_run(push_allowed=True))
+    monkeypatch.setattr(setup.subprocess, "run", lambda *a, **k: pytest.fail("pushed"))
+    s = _repo_setup(tmp_path, monkeypatch, ["", "checkout-incident-demo"])  # the name without its owner
+    assert s.repo(refresh=True) is True
+    assert "is not calinlupa/checkout-incident-demo: nothing pushed" in capsys.readouterr().out
+
+
+def test_failed_push_shows_the_reason(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                      capsys: pytest.CaptureFixture[str]) -> None:
+    class Denied:
+        returncode = 128
+        stderr = ("remote: Permission to calinlupa/checkout-incident-demo.git denied to clupa-do.\n"
+                  "fatal: unable to access '...': The requested URL returned error: 403\n")
+
+    monkeypatch.setattr(setup, "_run", _gh_run(push_allowed=True))
+    monkeypatch.setattr(setup.subprocess, "run", lambda *a, **k: Denied())
+    s = _repo_setup(tmp_path, monkeypatch, ["", "calinlupa/checkout-incident-demo"], valid=False)
+    assert s.repo(refresh=True) is False
+    assert "returned error: 403" in capsys.readouterr().out
+
+
+def test_a_step_that_does_not_finish_names_what_it_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                          capsys: pytest.CaptureFixture[str]) -> None:
+    for name in ("prerequisites", "transport", "tokens", "actor", "host_mode", "host_images", "broker"):
+        monkeypatch.setattr(setup.Setup, name, lambda self, **_: True)
+    monkeypatch.setattr(setup.Setup, "repo", lambda self, **_: False)
+    monkeypatch.setattr(setup.Setup, "droplet", lambda self: pytest.fail("the droplet step ran"))
+    monkeypatch.setattr(setup, "check_gateway", lambda token, env: "no")
+    monkeypatch.setattr(setup.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(setup, "_step", lambda *a: pytest.fail("check_setup.py ran"))
+    env_file = tmp_path / ".env"
+    env_file.write_text("")
+    assert setup.main(["--examples", "12", "--env-file", str(env_file)]) == 1
+    out = capsys.readouterr().out
+    assert "[skip] droplet (12): not done: the demo repository did not finish" in out
+    assert "[skip] scripts/check_setup.py" in out
+    assert "droplet (12): run this script again once the demo repository is done" in out

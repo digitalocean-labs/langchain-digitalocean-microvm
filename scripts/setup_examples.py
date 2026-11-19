@@ -616,9 +616,10 @@ class Setup:
 
     def repo(self, *, refresh: bool) -> bool:
         self.heading(f"Demo repository ({self.plan.incident_label})")
-        repo = self.env.get("DO_INCIDENT_REPO")
-        if repo and not refresh:
-            ok = self.verdict(f"DO_INCIDENT_REPO {repo}", verify_repo(repo), "rebuild the demo repository (--refresh-repo)")
+        current = self.env.get("DO_INCIDENT_REPO", "")
+        verdict = verify_repo(current) if current else (False, "not set")
+        if current and not refresh:
+            ok = self.verdict(f"DO_INCIDENT_REPO {current}", verdict, "rebuild the demo repository (--refresh-repo)")
             if ok is not False:
                 return True
             if self.dry_run:
@@ -626,37 +627,48 @@ class Setup:
         if self.dry_run:
             self.todo.append("create or rebuild the public demo repository (gh) and set DO_INCIDENT_REPO")
             return False
+        valid = bool(current) and verdict[0] is True  # a rebuild that does not happen keeps this one
+
+        def keep(why: str) -> bool:
+            if valid:
+                self.say("warn", f"DO_INCIDENT_REPO {current}", f"{why}; kept as it is (its commits are older)")
+                return True
+            self.say("FAIL", "DO_INCIDENT_REPO", why)
+            return False
+
         login = _run(["gh", "api", "user", "--jq", ".login"])
         if login is None:
-            self.say("FAIL", "gh", "not logged in: run `gh auth login`")
-            return False
-        repo = self.ask("       public repository to use (owner/name)", repo or f"{login}/checkout-demo")
+            return keep("gh is not logged in: run `gh auth login`")
+        repo = self.ask("       public repository to use (owner/name)", current or f"{login}/checkout-demo")
         if not REPO_NAME.fullmatch(repo):
-            self.say("FAIL", repo, "expected owner/name (letters, digits, - . _)")
-            return False
+            return keep(f"{repo!r}: expected owner/name (letters, digits, - . _)")
         visibility = _run(["gh", "repo", "view", repo, "--json", "visibility", "--jq", ".visibility"])
         if visibility is None:
-            if not self.confirm(f"       create the public repository {repo}?"):
-                return False
+            if not self.confirm(f"       create the public repository {repo} (as {login})?"):
+                return keep("not created")
             if _run(["gh", "repo", "create", repo, "--public", "--description", "Demo service for an incident-response example"]) is None:
-                self.say("FAIL", "gh repo create", repo)
-                return False
-        elif visibility != "PUBLIC":
-            self.say("FAIL", repo, "is not public (the droplet clones it without credentials)")
-            return False
-        elif self.ask(f"       {repo} exists; its history will be replaced. Type its name to confirm") != repo:
-            return False
+                return keep(f"gh repo create {repo} failed")
+        else:
+            if visibility != "PUBLIC":
+                return keep(f"{repo} is not public (the droplet clones it without credentials)")
+            if _run(["gh", "api", f"repos/{repo}", "--jq", ".permissions.push"]) != "true":
+                return keep(f"the gh login {login} cannot push to {repo}: `gh auth switch` to an account that can, "
+                            f"or choose a repository under {login}")
+            answer = self.ask(f"       {repo} exists: replace its commits with the demo's two new ones (the droplet clones "
+                              "them when it is created)? Type its name to confirm")
+            if answer != repo:
+                return keep(f"the name typed ({answer!r}) is not {repo}: nothing pushed")
         with tempfile.TemporaryDirectory(prefix="checkout-demo-") as tmp:
             dest = Path(tmp) / "repo"
             if _run(["bash", str(DEMO_REPO_SCRIPT), str(dest)]) is None:
-                self.say("FAIL", "make_demo_repo.sh", "failed")
-                return False
+                return keep("make_demo_repo.sh failed")
             # gh's credential helper, so no token is written to the remote URL or argv
             push = ["git", "-C", str(dest), "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",
                     "push", "--force", f"https://github.com/{repo}.git", "HEAD:main"]
-            if _run(push) is None:
-                self.say("FAIL", "git push", repo)
-                return False
+            done = subprocess.run(push, capture_output=True, text=True, check=False)
+            if done.returncode:
+                reason = next((ln.strip() for ln in reversed(done.stderr.splitlines()) if ln.strip()), "git push failed")
+                return keep(f"git push to {repo} failed: {reason[:200]}")
         self.save("DO_INCIDENT_REPO", repo)
         self.say("ok", "DO_INCIDENT_REPO", f"{repo}, two commits pushed")
         if DROPLET_STATE.exists():
@@ -867,23 +879,42 @@ def main(argv: list[str] | None = None) -> int:
     if not setup.prerequisites(repo=repo, droplet=droplet) and not args.dry_run:
         print("\nInstall what is marked FAIL, then run this again (nothing was changed).")
         return 1
-    ready = setup.transport() & setup.tokens()
+    failed: list[str] = []
+
+    def step(name: str, ok: bool) -> bool:
+        if not ok:
+            failed.append(name)
+        return ok
+
+    def blocked(what: str) -> None:
+        """A step the run did not reach because an earlier one did not finish."""
+        setup.say("skip", what, f"not done: {', '.join(failed)} did not finish (see above)")
+        setup.todo.append(f"{what}: run this script again once {', '.join(failed)} is done")
+
+    ready = step("the transport", setup.transport()) & step("the tokens", setup.tokens())
     if plan.incident:
-        ready &= setup.actor()
+        ready &= step("the actor", setup.actor())
     if plan.image:
-        ready &= setup.image()
+        ready &= step("the sandbox image", setup.image())
     if repo:
-        ready &= setup.repo(refresh=args.refresh_repo)
-    if ready and droplet:
-        ready &= setup.droplet()
+        ready &= step("the demo repository", setup.repo(refresh=args.refresh_repo))
+    if droplet:
+        if ready:
+            ready &= step("the droplet", setup.droplet())
+        else:
+            print()
+            blocked(f"droplet ({plan.incident_label})")
     if plan.hosts:
-        ready &= setup.host_mode() & setup.host_images()
+        ready &= step("the agent hosts", setup.host_mode() & setup.host_images())
     if plan.agents:
-        ready &= setup.broker()
+        ready &= step("the broker URL", setup.broker())
         if setup.env.get("DO_ACTION_GATEWAY_TOKEN") and check_gateway(setup.env["DO_ACTION_GATEWAY_TOKEN"], setup.env) is None:
             setup.leftovers()
-    if ready and not args.dry_run:
-        ready &= _step("scripts/check_setup.py", "--examples", ",".join(plan.examples))
+    if not args.dry_run:
+        if ready:
+            ready &= _step("scripts/check_setup.py", "--examples", ",".join(plan.examples))
+        else:
+            blocked("scripts/check_setup.py")
     if setup.todo:
         print("\nTo do:\n" + "\n".join(f"- {item}" for item in setup.todo))
     if setup.unchecked:
