@@ -127,7 +127,8 @@ graph in LangGraph Studio or agent-chat-ui, see [Run with `langgraph dev`](#run-
 
 ## Run (real MicroVMs)
 
-Set `DO_MICROVM_API_TOKEN`, `DO_MICROVM_IMAGE` (see the repository's README) and `DO_MODEL_ACCESS_KEY` in `.env` and leave `DO_MICROVM_TRANSPORT` unset:
+Set `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN`, `DO_MICROVM_IMAGE` (see the repository's README) and `DO_MODEL_ACCESS_KEY` in `.env`
+and leave `DO_MICROVM_TRANSPORT` unset; `uv run python scripts/setup_examples.py` sets them up step by step (`--dry-run` only checks):
 
 ```bash
 uv run examples/10_erasure/prepare.py --clean

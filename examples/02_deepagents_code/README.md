@@ -22,7 +22,8 @@ dcode --sandbox microvm --sandbox-id <id>     # reuse, resume or create sandbox 
 dcode --sandbox microvm -n "run the tests and summarize failures"   # non-interactive
 ```
 
-From a checkout of this repository: `uv run dcode --sandbox microvm`.
+From a checkout of this repository: `uv run dcode --sandbox microvm`; `uv run python scripts/setup_examples.py --examples 02`
+sets up the tokens, the image and the `dcode` CLI step by step (`--dry-run` only checks).
 `DO_MICROVM_TRANSPORT=local` runs the sandbox as a local directory instead.
 
 To use DigitalOcean Serverless Inference as dcode's model, point its Anthropic

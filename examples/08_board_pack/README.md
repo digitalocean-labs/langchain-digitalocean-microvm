@@ -84,7 +84,8 @@ The Chinook database is read from [`../07_sales_assistant/data/`](../07_sales_as
 
 From the repository root, after `uv sync --all-extras`, with a model configured (see
 [`../README.md`](../README.md)) and, for real MicroVMs, `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` +
-`DO_MICROVM_IMAGE` (the root sandbox image from `scripts/build_sandbox_image.py`).
+`DO_MICROVM_IMAGE` (the root sandbox image from `scripts/build_sandbox_image.py`). `uv run python scripts/setup_examples.py` sets them up
+step by step; `--dry-run` only checks.
 
 ```bash
 uv run examples/08_board_pack/prepare.py --clean          # pre-flight, template, empty dashboard

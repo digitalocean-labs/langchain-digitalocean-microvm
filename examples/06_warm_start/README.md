@@ -36,7 +36,8 @@ lifecycle.delete_template(template)                             # when you no lo
 `warm_start.py` builds (or reuses) a template with the Chinook database and
 matplotlib, times a cold sandbox (boot + upload + `pip install`) against a
 clone of the template, and asks the analyst of
-[`05_data_analyst`](../05_data_analyst) one question in the warm sandbox.
+[`05_data_analyst`](../05_data_analyst) one question in the warm sandbox. It needs the variables of
+[`05_data_analyst`](../05_data_analyst); `uv run python scripts/setup_examples.py` sets them up step by step (`--dry-run` only checks).
 
 ```bash
 uv run examples/06_warm_start/warm_start.py                    # build/reuse the template, compare, ask
