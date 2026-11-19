@@ -562,6 +562,7 @@ class CommanderHost:
         self.on_cleanup: Any = None
         self.events: list[dict[str, Any]] = []  # the host's own event log (/incident/events)
         self.events_fail = False
+        self.no_thread = False  # the host is up, the commander's thread is not created yet
 
     def track(self, task: str, role: str, status: str = "running") -> None:
         self.tracked[task] = {"task_id": task, "agent_name": role, "thread_id": task, "run_id": f"r-{task}", "status": status}
@@ -592,6 +593,8 @@ class CommanderHost:
                 return httpx.Response(500, json={"error": "log unreadable"})
             after = int(request.url.params.get("after", "0"))
             return httpx.Response(200, json={"events": self.events[after:], "next": len(self.events)})
+        if self.no_thread and parts[:1] == ["threads"] and method == "GET":
+            return httpx.Response(404, json={"detail": "Thread not found"})
         if method == "POST" and parts == ["threads"]:
             return httpx.Response(200, json={"thread_id": json.loads(request.content)["thread_id"]})
         if method == "POST" and len(parts) == 3 and parts[2] == "runs":
@@ -773,6 +776,24 @@ async def test_an_approval_waits_in_the_remediators_thread_and_the_decision_resu
     first = await anext(stream)
     await stream.aclose()
     assert first["agent"] == "remediator" and first["input"] == {"decision": "approve"}
+    await relay.close()
+
+
+async def test_an_incident_asked_for_before_its_thread_exists_reads_as_starting(relay_world) -> None:
+    relay_module, relay, host = relay_world
+    await _started(relay, "abcd1234")
+    host.no_thread = True  # as between the host coming up and `start` creating the thread
+    assert await relay.refresh("abcd1234") is True  # nothing to read yet: keep watching
+    detail = await relay.detail("abcd1234")
+    assert detail["status"] == "starting" and detail["pending"] == [] and detail["run"] is None and detail["tasks"] == []
+    assert detail["story"] == relay_module.public_story(relay_module.new_story(), "starting", 0)
+    with pytest.raises(relay_module.NotPending):
+        await relay.message("abcd1234", "status?")
+    app = relay_module.make_app(relay, operator_token="op")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://relay") as http:
+        auth = {"Authorization": "Bearer op"}
+        assert (await http.get("/incidents/abcd1234", headers=auth)).json()["status"] == "starting"
+        assert (await http.post("/incidents/abcd1234/messages", json={"text": "status?"}, headers=auth)).status_code == 409
     await relay.close()
 
 
