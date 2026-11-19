@@ -79,7 +79,14 @@ another file.
 
 ## Real MicroVMs
 
-`uv run python scripts/setup_examples.py` sets up the variables below step by step; `--dry-run` only checks. By hand:
+Set up the variables below step by step:
+
+```bash
+uv run python scripts/setup_examples.py
+uv run python scripts/setup_examples.py --dry-run   # checks only
+```
+
+By hand:
 
 ```bash
 # .env

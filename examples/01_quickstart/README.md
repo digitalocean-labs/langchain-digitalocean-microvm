@@ -36,5 +36,9 @@ uv run examples/01_quickstart/pause_all.py                               # pause
 
 A real MicroVM needs `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` and `DO_MICROVM_IMAGE` (a
 `linux/amd64` image that keeps running and ships `sh`, coreutils and `python3`;
-[`scripts/build_sandbox_image.py`](../../scripts/build_sandbox_image.py) builds one). `uv run python scripts/setup_examples.py` sets
-them up step by step; `--dry-run` only checks.
+[`scripts/build_sandbox_image.py`](../../scripts/build_sandbox_image.py) builds one). To set them up step by step:
+
+```bash
+uv run python scripts/setup_examples.py
+uv run python scripts/setup_examples.py --dry-run   # checks only
+```

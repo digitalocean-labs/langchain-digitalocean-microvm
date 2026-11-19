@@ -86,8 +86,14 @@ the sandbox's. Commands run in the thread's own MicroVM, not on your machine.
 
 From the repository root, with a model configured (see [`../README.md`](../README.md)) and
 `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` + `DO_MICROVM_IMAGE` (an image the agent can `pip install` into, as in
-[`05_data_analyst`](../05_data_analyst)). `uv run python scripts/setup_examples.py --examples 07` sets them up step by step,
-with the optional `TAVILY_API_KEY` (below); `--dry-run` only checks.
+[`05_data_analyst`](../05_data_analyst)). To set them up step by step, with the optional `TAVILY_API_KEY` (below):
+
+```bash
+uv run python scripts/setup_examples.py --examples 07
+uv run python scripts/setup_examples.py --examples 07 --dry-run   # checks only
+```
+
+Then:
 
 ```bash
 uv run examples/07_sales_assistant/run_script.py             # territory report, then the RFQ (one thread, two turns)
