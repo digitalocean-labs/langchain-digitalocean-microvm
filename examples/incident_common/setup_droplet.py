@@ -225,15 +225,21 @@ def _snapshot_id(gateway: ActionGateway) -> int | None:
     return None
 
 
+def _load_state() -> dict:
+    if not STATE.exists():
+        raise SystemExit(f"{STATE} not found: run setup_droplet.py without a flag first")
+    return json.loads(STATE.read_text())
+
+
 def deploy_bad() -> None:
-    state = json.loads(STATE.read_text())
+    state = _load_state()
     ssh(state["ip"], f"git -C /opt/checkout checkout -q {state['bad']} && systemctl restart checkout")
     print(f"deployed {state['bad']}: the service fails from now on; start the example")
 
 
 def verify_restore(gateway: ActionGateway) -> None:
     """The remedy the example's commander asks for, run by hand: bad deploy, restore, wait until healthy."""
-    state = json.loads(STATE.read_text())
+    state = _load_state()
     deploy_bad()
     wait("the failure", lambda: True if _status_code(state["ip"]) == 503 else None, 120)
     print("failing; restoring from the snapshot")
