@@ -331,7 +331,7 @@ def test_host_image_build_keeps_its_repository(tmp_path: Path, monkeypatch: pyte
 
 def test_host_mode_and_broker_in_a_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
                                           capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.setattr(setup, "verify_broker", lambda url: (True, "the tunnel answers (502)"))
+    monkeypatch.setattr(setup, "verify_broker", lambda url: (True, "answers 502"))
     s = _setup_12(tmp_path, "DO_INCIDENT_BROKER_URL=http://127.0.0.1:8788\n")
     assert s.host_mode() is False and s.broker() is False
     assert any("DO_MICROVM_HOST_MODE=microvm" in item for item in s.todo)
@@ -339,7 +339,7 @@ def test_host_mode_and_broker_in_a_dry_run(tmp_path: Path, monkeypatch: pytest.M
     s = _setup_12(tmp_path, "DO_MICROVM_HOST_MODE=microvm\nDO_INCIDENT_BROKER_URL=https://a-b.trycloudflare.com \n")
     assert s.host_mode() is True and s.broker() is True
     out = capsys.readouterr().out
-    assert "the tunnel answers (502)" in out and not s.unchecked
+    assert "answers 502" in out and not s.unchecked
 
 
 def _connections(pages: list[list[dict[str, str]]], monkeypatch: pytest.MonkeyPatch, status: int = 200) -> None:
@@ -380,9 +380,9 @@ def test_missing_connection_fails_the_dry_run_only(tmp_path: Path, monkeypatch: 
 
 @pytest.mark.parametrize(("resolves", "answer", "ok", "detail"), [
     (False, 200, False, "does not resolve"),
-    (True, 530, False, "not connected"),
-    (True, 502, True, "the relay is not running"),
-    (True, 404, True, "the tunnel and the relay answer"),
+    (True, 530, False, "answers 530"),
+    (True, 502, True, "once the relay runs"),
+    (True, 404, True, "answers 404"),
     (True, None, False, "no answer"),
 ])
 def test_verify_broker(monkeypatch: pytest.MonkeyPatch, resolves: bool, answer: int | None, ok: bool, detail: str) -> None:

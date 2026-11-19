@@ -39,9 +39,9 @@ starts with recommendations (a team or namespace of its own, token expiry, a spe
   the same registry; a set image is checked against its sources (its tag is the content hash build_image.py computes
   locally with --no-push) and rebuilt when they differ. `DO_INCIDENT_BROKER_URL`: the script prints the tunnel
   command and asks for the https URL; it does not start the tunnel. A set URL is checked with one GET: a name that
-  does not resolve (the tunnel is not running, or the URL is an earlier tunnel's) fails; the tunnel's 502 (the relay
-  is not running) and an answer from the relay pass. Action Gateway endpoints named `microvm-ag-*` left
-  by earlier runs are counted (read-only).
+  does not resolve, no answer or a 530 fails; any other answer passes, a 502, 503 or 504 included (the relay does
+  not run during setup). Action Gateway endpoints named `microvm-ag-*` (a running relay's, or left by earlier runs)
+  are counted (read-only).
 - Last: scripts/check_setup.py for the selected examples.
 
 What is already set is checked, not only looked up: the image's manifest (crane; with DO_REGISTRY_TOKEN for a
@@ -358,22 +358,22 @@ def verify_connections(token: str, actor: str) -> Verdict:
 
 
 def verify_broker(url: str) -> Verdict:
-    """What answers at the broker URL: nothing (the tunnel is not running, or the URL is an earlier tunnel's), the
-    tunnel without the relay (a 502 from the tunnel; expected during setup), or the relay."""
+    """One GET of the broker URL. Fails when the name does not resolve, nothing answers, or the answer is 530; a 502,
+    503 or 504 passes (the relay is not running during setup), and so does any other answer."""
     host = urlparse(url).hostname or ""
     try:
         socket.getaddrinfo(host, 443)
     except (socket.gaierror, UnicodeError):
-        return False, "the name does not resolve: the tunnel is not running, or this URL is an earlier tunnel's"
+        return False, "the name does not resolve: start the tunnel and set the URL it prints"
     try:
         status = httpx.get(url, timeout=10.0).status_code
     except httpx.HTTPError as exc:
-        return False, f"no answer ({type(exc).__name__}): the tunnel is not running, or this URL is an earlier tunnel's"
+        return False, f"no answer ({type(exc).__name__}): start the tunnel and set the URL it prints"
     if status == 530:
-        return False, "the tunnel is not connected (530): start it and set the URL it prints"
+        return False, "answers 530: start the tunnel and set the URL it prints"
     if status in (502, 503, 504):
-        return True, f"the tunnel answers ({status}); the relay is not running, and serves the broker when it starts"
-    return True, f"the tunnel and the relay answer ({status})"
+        return True, f"answers {status}; the broker answers once the relay runs"
+    return True, f"answers {status}"
 
 
 def verify_droplet() -> Verdict:
