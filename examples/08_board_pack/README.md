@@ -88,11 +88,20 @@ of its own**, cloned from one template the moment it gets work:
 The Chinook database is read from [`../07_sales_assistant/data/`](../07_sales_assistant/data)
 ([lerocha/chinook-database](https://github.com/lerocha/chinook-database), MIT).
 
-## Run
+## Run (local mode, no account)
 
 From the repository root, after `uv sync --all-extras`, with a model configured (see
-[`../README.md`](../README.md)) and, for real MicroVMs, `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` +
-`DO_MICROVM_IMAGE` (the root sandbox image from `scripts/build_sandbox_image.py`). To set them up step by step:
+[`../README.md`](../README.md)). Sandboxes are local directories and the helpers run with this process's Python, so charts need
+matplotlib; `chaos.py` refuses to run in local mode.
+
+```bash
+DO_MICROVM_TRANSPORT=local uv run --with matplotlib examples/08_board_pack/run_script.py
+```
+
+## Run (real MicroVMs)
+
+From the repository root, after `uv sync --all-extras`, with a model configured and `DO_MICROVM_API_TOKEN`,
+`DO_MICROVM_ACCESS_TOKEN` + `DO_MICROVM_IMAGE` (the root sandbox image from `scripts/build_sandbox_image.py`). To set them up step by step:
 
 ```bash
 uv run python scripts/setup_examples.py
@@ -133,11 +142,6 @@ analysts, then the auditor and the publisher, each with its tools and a `MicroVM
 
 **Opening the result**: `export_board_pack` copies the HTML to
 `outputs/<thread>/board-pack.html` and opens it in the browser (`BOARD_PACK_OPEN=0` to turn that off).
-
-**Local mode** (`DO_MICROVM_TRANSPORT=local`, no DigitalOcean account): sandboxes are local
-directories and the helpers run with this process's Python, so charts need matplotlib:
-`DO_MICROVM_TRANSPORT=local uv run --with matplotlib examples/08_board_pack/run_script.py`.
-`chaos.py` refuses to run in local mode.
 
 **Clean-up**: `run_script.py --delete`, `prepare.py --clean` (keeps the template), or
 `scripts/delete_all.py --yes` (everything else; add `--include-templates --all-owners` for the template too).

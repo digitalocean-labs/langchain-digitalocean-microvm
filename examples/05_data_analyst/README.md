@@ -25,7 +25,15 @@ the agent the first time it needs it. Between runs the sandbox is **paused**,
 so the next run resumes it with the database, matplotlib and earlier charts in
 place.
 
-## Run
+## Run (local mode)
+
+Local mode runs the agent's commands, `pip install` included, on this machine: use a scratch checkout.
+
+```bash
+DO_MICROVM_TRANSPORT=local uv run examples/05_data_analyst/analyst.py
+```
+
+## Run (real MicroVMs)
 
 From the repository root, with a model configured (see [`../README.md`](../README.md))
 and `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` + `DO_MICROVM_IMAGE`. To set them up step by step:
@@ -46,8 +54,7 @@ uv run examples/05_data_analyst/analyst.py --delete
 
 The image must let the agent `pip install` (outbound network, a writable
 site-packages): [`scripts/build_sandbox_image.py`](../../scripts/build_sandbox_image.py)'s
-image does. Local mode (`DO_MICROVM_TRANSPORT=local`) works but runs the agent's
-commands, `pip install` included, on this machine.
+image does.
 
 ## Where the time goes
 
