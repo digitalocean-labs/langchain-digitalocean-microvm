@@ -5,6 +5,9 @@
 **Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs `dcode`, Python 3.12+; its model comes from `-M`):
 
 ```bash
+git clone https://github.com/digitalocean-labs/langchain-digitalocean-microvm
+cd langchain-digitalocean-microvm
+uv sync --all-extras --python 3.12   # needs uv: https://docs.astral.sh/uv/; dcode needs Python 3.12+
 DO_MICROVM_TRANSPORT=local uv run dcode --sandbox microvm
 ```
 

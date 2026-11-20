@@ -29,7 +29,9 @@ The tests need no keys. The example needs a model: `DO_MODEL_ACCESS_KEY` (Digita
 another provider's key, see [`examples/README.md`](examples/README.md#setup).
 
 ```bash
-uv sync --all-extras
+git clone https://github.com/digitalocean-labs/langchain-digitalocean-microvm
+cd langchain-digitalocean-microvm
+uv sync --all-extras                                       # needs uv: https://docs.astral.sh/uv/
 uv run pytest                                              # unit tests: no keys, no network
 export DO_MODEL_ACCESS_KEY=...                             # or EXAMPLES_MODEL plus that provider's key
 DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py   # a deep agent in a local directory

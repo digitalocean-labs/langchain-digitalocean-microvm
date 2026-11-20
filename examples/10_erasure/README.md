@@ -7,7 +7,9 @@ request touches are **mocks** in every mode (below).
 **Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model key):
 
 ```bash
-uv sync --all-extras    # from the repository root
+git clone https://github.com/digitalocean-labs/langchain-digitalocean-microvm
+cd langchain-digitalocean-microvm
+uv sync --all-extras    # needs uv: https://docs.astral.sh/uv/
 cp -n .env.example .env # then set a model key in .env, one of:
                         #   DO_MODEL_ACCESS_KEY: DigitalOcean Serverless Inference, with access to
                         #     anthropic-claude-haiku-4.5 and anthropic-claude-4.6-sonnet
