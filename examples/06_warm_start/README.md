@@ -42,6 +42,16 @@ lifecycle.delete_template(template)                             # when you no lo
   team's MicroVM limit. `scripts/delete_all.py --include-templates --all-owners --yes` deletes them too, with every other user's MicroVMs (add `--all-namespaces` where namespaces are in use; without `--include-templates` it keeps them).
 - Local mode copies a directory and does not run `setup` (it would run on this machine).
 
+## Run (local mode)
+
+Local mode copies a directory as the template and does not run `setup`; the agent's commands run on this machine.
+
+```bash
+DO_MICROVM_TRANSPORT=local uv run examples/06_warm_start/warm_start.py
+```
+
+## Run (real MicroVMs)
+
 `warm_start.py` builds (or reuses) a template with the Chinook database and
 matplotlib, times a cold sandbox (boot + upload + `pip install`) against a
 clone of the template, and asks the analyst of

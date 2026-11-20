@@ -91,7 +91,17 @@ The agent also has `execute`, so it *could* edit the database in its own sandbox
 tools enforce read-only queries and an approved insert, but that boundary is the tools', not
 the sandbox's. Commands run in the thread's own MicroVM, not on your machine.
 
-## Run
+## Run (local mode, no account)
+
+Local mode (`DO_MICROVM_TRANSPORT=local`) needs no DigitalOcean account; the sandbox is a local directory, the template's
+setup is skipped and the prompt tells the agent not to install packages (its commands run on this machine), so charts need
+matplotlib installed locally.
+
+```bash
+DO_MICROVM_TRANSPORT=local uv run examples/07_sales_assistant/run_script.py
+```
+
+## Run (real MicroVMs)
 
 From the repository root, with a model configured (see [`../README.md`](../README.md)) and
 `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` + `DO_MICROVM_IMAGE` (an image the agent can `pip install` into, as in
@@ -124,10 +134,6 @@ uv run examples/07_sales_assistant/mail_server/mock_mail_server.py &
 cd examples/07_sales_assistant && uv run langgraph dev --n-jobs-per-worker 10
 uv run examples/07_sales_assistant/mail_server/send_to_inbox.py --reset   # a fresh RFQ in the inbox
 ```
-
-Local mode (`DO_MICROVM_TRANSPORT=local`) works without a DigitalOcean account; the sandbox is
-a local directory, the template's setup is skipped and the prompt tells the agent not to
-install packages (its commands run on this machine), so charts need matplotlib installed locally.
 
 ### Weekly newsletter (optional)
 

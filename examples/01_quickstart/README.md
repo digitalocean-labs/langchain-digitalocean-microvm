@@ -31,16 +31,15 @@ agent = create_deep_agent(model=model, backend=backend)
 lifecycle.pause(backend)                             # later: get_or_create() resumes it
 ```
 
-## Run
+## Run (local mode, no account)
 
-From the repository root, with a model configured (see [`../README.md`](../README.md)):
+From the repository root, with a model configured (see [`../README.md`](../README.md)). The sandbox is a local directory and the agent's commands run on this machine:
 
 ```bash
-DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py   # no DigitalOcean account
-uv run examples/01_quickstart/quickstart.py                              # real MicroVM
-uv run examples/01_quickstart/quickstart.py --delete                     # delete the sandbox
-uv run examples/01_quickstart/pause_all.py                               # pause every running MicroVM you created
+DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py
 ```
+
+## Run (real MicroVMs)
 
 A real MicroVM needs `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` and `DO_MICROVM_IMAGE` (a
 `linux/amd64` image that keeps running and ships `sh`, coreutils and `python3`;
@@ -49,4 +48,12 @@ A real MicroVM needs `DO_MICROVM_API_TOKEN`, `DO_MICROVM_ACCESS_TOKEN` and `DO_M
 ```bash
 uv run python scripts/setup_examples.py
 uv run python scripts/setup_examples.py --dry-run   # checks only
+```
+
+Then:
+
+```bash
+uv run examples/01_quickstart/quickstart.py            # a real MicroVM
+uv run examples/01_quickstart/quickstart.py --delete   # delete the sandbox
+uv run examples/01_quickstart/pause_all.py             # pause every running MicroVM you created
 ```
