@@ -5,6 +5,7 @@
 **Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model key):
 
 ```bash
+# in terminal #1 run (setup, pre-flight, then the live dashboard):
 git clone https://github.com/digitalocean-labs/langchain-digitalocean-microvm
 cd langchain-digitalocean-microvm
 uv sync --all-extras    # needs uv: https://docs.astral.sh/uv/
@@ -12,10 +13,18 @@ cp -n .env.example .env # then set a model key in .env, one of:
                         #   DO_MODEL_ACCESS_KEY: DigitalOcean Serverless Inference, with access to
                         #     anthropic-claude-haiku-4.5 and anthropic-claude-4.6-sonnet
                         #   ANTHROPIC_API_KEY: Anthropic (other providers: EXAMPLES_MODEL, see ../README.md)
-DO_MICROVM_TRANSPORT=local uv run --with matplotlib examples/08_board_pack/run_script.py
+export DO_MICROVM_TRANSPORT=local
+uv run examples/08_board_pack/prepare.py --clean   # pre-flight checks; ends with READY
+uv run examples/08_board_pack/dashboard.py
+
+# in terminal #2 run, from the repository root (the board pack and a follow-up):
+export DO_MICROVM_TRANSPORT=local
+uv run --with matplotlib examples/08_board_pack/run_script.py
 ```
 
-The live dashboard and real MicroVMs: see Run below.
+`run_script.py --delete` removes the thread's MicroVMs at the end. For a run on real MicroVMs,
+`uv run python scripts/check_setup.py --examples 08` lists what is still missing, and
+`uv run python scripts/setup_examples.py` sets it up (see Run (real MicroVMs) below).
 
 ## Overview
 
