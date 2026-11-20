@@ -66,6 +66,19 @@ The image must let the agent `pip install` (outbound network, a writable
 site-packages): [`scripts/build_sandbox_image.py`](../../scripts/build_sandbox_image.py)'s
 image does.
 
+## LangSmith traces
+
+Optional. Set these in `.env` and run the example as above:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=data-analyst      # unset: the project is `default`
+```
+
+To read the traces, open <https://smith.langchain.com>, sign in and open the project named in `LANGSMITH_PROJECT`. Each question is a trace with the agent's model calls and tool calls.
+
 ## Where the time goes
 
 - The first run creates the MicroVM and uploads the 1 MB database; that boot is its longest wait.

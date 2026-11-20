@@ -64,3 +64,15 @@ The provider (`langchain_digitalocean_microvm.integrations.deepagents_code`)
 accepts dcode's sandbox id or the MicroVM id, and supports `seed_files` and
 `tags`. It does not support snapshot names; MicroVM checkpoints are not exposed
 through dcode yet.
+
+## LangSmith traces
+
+Optional. `dcode` sends its agent traces to the LangSmith project named by `LANGSMITH_PROJECT` (default `deepagents-code`) when tracing is on. Set these in the environment you start `dcode` from:
+
+```bash
+export LANGSMITH_TRACING=true
+export LANGSMITH_API_KEY=...
+export LANGSMITH_PROJECT=dcode-microvm      # unset: deepagents-code
+```
+
+To read the traces, open <https://smith.langchain.com>, sign in and open that project.

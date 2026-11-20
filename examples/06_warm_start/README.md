@@ -83,6 +83,19 @@ uv run examples/06_warm_start/warm_start.py --delete-template
 uv run examples/05_data_analyst/analyst.py --template          # the analyst, started from the same template
 ```
 
+## LangSmith traces
+
+Optional. Set these in `.env` and run the example as above:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=warm-start      # unset: the project is `default`
+```
+
+To read the traces, open <https://smith.langchain.com>, sign in and open the project named in `LANGSMITH_PROJECT`. The analyst's question is a trace with the agent's model calls and tool calls.
+
 ## Where the time goes
 
 | | Cold | Warm (clone of the template) |

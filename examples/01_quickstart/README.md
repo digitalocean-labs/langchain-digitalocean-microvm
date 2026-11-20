@@ -67,3 +67,16 @@ uv run examples/01_quickstart/quickstart.py            # a real MicroVM
 uv run examples/01_quickstart/quickstart.py --delete   # delete the sandbox
 uv run examples/01_quickstart/pause_all.py             # pause every running MicroVM you created
 ```
+
+## LangSmith traces
+
+Optional. Set these in `.env` and run the example as above:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=quickstart      # unset: the project is `default`
+```
+
+To read the traces, open <https://smith.langchain.com>, sign in and open the project named in `LANGSMITH_PROJECT`. Each run of the agent is a trace with its model calls and tool calls.

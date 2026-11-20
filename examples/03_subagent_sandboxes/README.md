@@ -159,3 +159,16 @@ cat outputs/lab-*/reviewer/outputs/review.md
 - **Permissions.** deepagents cannot enforce `permissions` rules on a backend
   that runs commands, so a sandboxed subagent must not have (or inherit) any;
   the MicroVM is the boundary. `per_subagent_specs` says so if it happens.
+
+## LangSmith traces
+
+Optional. Set these in `.env` and run the example as above:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=subagent-sandboxes      # unset: the project is `default`
+```
+
+To read the traces, open <https://smith.langchain.com>, sign in and open the project named in `LANGSMITH_PROJECT`. A trace shows the supervisor and each subagent's `task` as a nested run with its tool calls.

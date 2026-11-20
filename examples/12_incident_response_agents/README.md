@@ -189,9 +189,10 @@ You do not start `langgraph dev` yourself here: the relay and the commander star
 # .env
 LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=...
-LANGSMITH_PROJECT=...
+LANGSMITH_PROJECT=...      # unset: the project is `default`
 ```
 
+- Open <https://smith.langchain.com>, sign in and open the project named in `LANGSMITH_PROJECT` (`default` when it is unset).
 - **Local mode:** each host is a process of this machine that inherits the console's environment, so the commander and every specialist are traced, each host's runs as traces of their own.
 - **Real mode:** a host is a MicroVM whose environment holds only the variables the relay and the commander set (`host_env` in `relay.py`, `role_env` in `agent.py`), and those leave the LangSmith variables out: nothing in the MicroVMs is traced.
 - **Passthrough:** `DO_MICROVM_SUBAGENT_ENV_PASSTHROUGH=LANGSMITH_TRACING,LANGSMITH_API_KEY,LANGSMITH_PROJECT` passes them to the commander's host, which puts the key in that MicroVM; the specialists' hosts do not get them.
