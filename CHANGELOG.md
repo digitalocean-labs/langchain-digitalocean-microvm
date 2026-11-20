@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.2
+
+Supports `deepagents>=0.7.0,<0.8.0`. No API changes; the READMEs of the examples are reorganised.
 
 **Changed**
 
