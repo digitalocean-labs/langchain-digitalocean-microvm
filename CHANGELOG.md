@@ -4,7 +4,7 @@
 
 **Changed**
 
-- Examples 01, 05, 06, 07, 08 and 11 have a "Run (local mode)" and a "Run (real MicroVMs)" section, as 03, 09, 10 and 12 do.
+- Examples 01, 05, 06, 07, 08 and 11 have a "Run (local mode)" and a "Run (real MicroVMs)" section, as 03, 09, 10 and 12 do. Example 11's real-MicroVMs section lists the commands.
 
 ## 0.2.1
 
