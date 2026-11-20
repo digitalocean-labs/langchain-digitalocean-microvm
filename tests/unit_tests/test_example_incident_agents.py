@@ -36,11 +36,16 @@ _ROOT = Path(__file__).resolve().parents[2]
 _EXAMPLE = _ROOT / "examples" / "12_incident_response_agents"
 # Modules of the same names in other examples (09's agent and approvals) and the agent-host image.
 _MODULES = ("agent", "roles", "relay", "console", "approvals", "postmortem", "graphs", "routes", "broker_client", "graph")
+# What setup_droplet.py writes to incident_common/outputs/incident.env, which console.py and relay.py load when imported.
+_INCIDENT_ENV = ("DO_INCIDENT_URL", "DO_INCIDENT_DROPLET_ID", "DO_INCIDENT_REPO")
 
 
 @pytest.fixture
 def example(tmp_path, monkeypatch):
     """The example's modules, importable by name in local mode, with its own event log; other examples' modules put back after."""
+    # A real droplet's incident.env must not reach these offline tests.
+    for name in _INCIDENT_ENV:
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("DO_MICROVM_TRANSPORT", "local")
     monkeypatch.setenv("EXAMPLES_MODEL", "anthropic:claude-haiku-4-5")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
@@ -52,7 +57,11 @@ def example(tmp_path, monkeypatch):
     saved = {n: sys.modules.pop(n) for n in names()}
     events = importlib.import_module("incident_common.events")
     monkeypatch.setattr(events, "EVENTS", tmp_path / "events.jsonl")
+    environ = dict(os.environ)
     yield tmp_path
+    # Undo what imports wrote to os.environ, which monkeypatch does not track; its own undo runs after this.
+    os.environ.clear()
+    os.environ.update(environ)
     agent = sys.modules.get("agent")
     if agent is not None and hasattr(agent, "gateway"):
         agent.gateway.close()
