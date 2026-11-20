@@ -2,9 +2,16 @@
 
 **Requires** (real MicroVMs): a team limit of at least 6 MicroVMs, one per specialist (four analysts, auditor, publisher), plus 1 temporary MicroVM while the template is built. The orchestrator runs in your process.
 
-**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model key):
 
 ```bash
+git clone https://github.com/digitalocean-labs/langchain-digitalocean-microvm
+cd langchain-digitalocean-microvm
+uv sync --all-extras    # needs uv: https://docs.astral.sh/uv/
+cp -n .env.example .env # then set a model key in .env, one of:
+                        #   DO_MODEL_ACCESS_KEY: DigitalOcean Serverless Inference, with access to
+                        #     anthropic-claude-haiku-4.5 and anthropic-claude-4.6-sonnet
+                        #   ANTHROPIC_API_KEY: Anthropic (other providers: EXAMPLES_MODEL, see ../README.md)
 DO_MICROVM_TRANSPORT=local uv run --with matplotlib examples/08_board_pack/run_script.py
 ```
 

@@ -7,9 +7,16 @@
 > (`python/m2/m2.3_sandbox_agent.py`), which runs a LangSmith sandbox through a
 > create → use → delete cycle.
 
-**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model key):
 
 ```bash
+git clone https://github.com/digitalocean-labs/langchain-digitalocean-microvm
+cd langchain-digitalocean-microvm
+uv sync --all-extras    # needs uv: https://docs.astral.sh/uv/
+cp -n .env.example .env # then set a model key in .env, one of:
+                        #   DO_MODEL_ACCESS_KEY: DigitalOcean Serverless Inference, with access to
+                        #     anthropic-claude-haiku-4.5
+                        #   ANTHROPIC_API_KEY: Anthropic (other providers: EXAMPLES_MODEL, see ../README.md)
 DO_MICROVM_TRANSPORT=local uv run examples/01_quickstart/quickstart.py
 ```
 

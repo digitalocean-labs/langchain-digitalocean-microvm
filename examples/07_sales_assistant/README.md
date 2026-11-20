@@ -11,7 +11,10 @@
 **Quick run** (a real MicroVM; needs a model, see [`../README.md`](../README.md)):
 
 ```bash
-uv run python scripts/setup_examples.py --examples 07
+git clone https://github.com/digitalocean-labs/langchain-digitalocean-microvm
+cd langchain-digitalocean-microvm
+uv sync --all-extras    # needs uv: https://docs.astral.sh/uv/
+uv run python scripts/setup_examples.py --examples 07   # sets up what is missing (tokens, model key, sandbox image) in .env
 uv run examples/07_sales_assistant/run_script.py
 ```
 
