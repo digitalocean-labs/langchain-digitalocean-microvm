@@ -7,9 +7,14 @@
 > (`python/m5/async_lab`), whose supervisor delegates to an `AsyncSubAgent` on a
 > deployment you start by hand.
 
-**Quick run** (local mode: no DigitalOcean account; each host is a local `langgraph dev` process, and the agents' commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+**Quick run** (local mode: no DigitalOcean account; each host is a local `langgraph dev` process, and the agents' commands run on this machine; needs a model key):
 
 ```bash
+uv sync --all-extras    # from the repository root
+cp -n .env.example .env # then set a model key in .env, one of:
+                        #   DO_MODEL_ACCESS_KEY: DigitalOcean Serverless Inference, with access to
+                        #     anthropic-claude-haiku-4.5
+                        #   ANTHROPIC_API_KEY: Anthropic (other providers: EXAMPLES_MODEL, see ../README.md)
 uv run examples/04_async_subagents/run_script.py
 ```
 

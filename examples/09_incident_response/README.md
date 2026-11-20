@@ -5,9 +5,14 @@ verifier (paused while a human decides), plus 1 temporary MicroVM while the temp
 whose actor has a DigitalOcean connection and a code-host connection; a public repository you own; a small droplet for
 the length of the run (below). Local mode needs none of it.
 
-**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model key):
 
 ```bash
+uv sync --all-extras    # from the repository root
+cp -n .env.example .env # then set a model key in .env, one of:
+                        #   DO_MODEL_ACCESS_KEY: DigitalOcean Serverless Inference, with access to
+                        #     anthropic-claude-haiku-4.5 and anthropic-claude-4.6-sonnet
+                        #   ANTHROPIC_API_KEY: Anthropic (other providers: EXAMPLES_MODEL, see ../README.md)
 export DO_MICROVM_TRANSPORT=local
 uv run examples/09_incident_response/prepare.py --clean
 uv run examples/09_incident_response/run_script.py --approve

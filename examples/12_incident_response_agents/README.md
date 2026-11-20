@@ -5,9 +5,14 @@ per specialist); the commander's and the specialists' images (below); an Action 
 DigitalOcean connection and a code-host connection; the droplet of [`../incident_common/`](../incident_common); a public
 HTTPS URL for the relay's broker port (a tunnel is enough for a demo). Local mode needs none of it.
 
-**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model, see [`../README.md`](../README.md)):
+**Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model key):
 
 ```bash
+uv sync --all-extras    # from the repository root
+cp -n .env.example .env # then set a model key in .env, one of:
+                        #   DO_MODEL_ACCESS_KEY: DigitalOcean Serverless Inference, with access to
+                        #     anthropic-claude-haiku-4.5 and anthropic-claude-4.6-sonnet
+                        #   ANTHROPIC_API_KEY: Anthropic (other providers: EXAMPLES_MODEL, see ../README.md)
 DO_MICROVM_TRANSPORT=local uv run examples/12_incident_response_agents/console.py demo --approve
 ```
 

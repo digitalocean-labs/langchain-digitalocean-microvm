@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+**Changed**
+
+- The local-mode Quick run of examples 01, 03, 04 and 08 to 12 starts with the setup it needs: `uv sync --all-extras`, `.env` and a model key (DigitalOcean Serverless Inference or Anthropic), with the models the key needs access to.
+
 ## 0.2.2
 
 Supports `deepagents>=0.7.0,<0.8.0`. No API changes; the READMEs of the examples are reorganised.
