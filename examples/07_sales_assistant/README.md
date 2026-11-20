@@ -171,6 +171,19 @@ Without the key the subagent is not registered.
 - A run that is cancelled or crashes still pauses the sandbox (`finally`); a killed agent
   process does not, and the MicroVM pauses itself after `DO_MICROVM_IDLE_TIMEOUT`.
 
+## LangSmith traces
+
+Optional. Set these in `.env` and run the example as above:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=sales-assistant      # unset: the project is `default`
+```
+
+To read the traces, open <https://smith.langchain.com>, sign in and open the project named in `LANGSMITH_PROJECT`. Each run is a trace with the agent's model calls and tool calls.
+
 ## Where the time goes
 
 Agent: `anthropic-claude-4.6-sonnet` (assistant, reviewer) and `anthropic-claude-haiku-4.5` (analyst, inbox

@@ -147,9 +147,17 @@ cd examples/08_board_pack && uv run langgraph dev           # graph id: board_pa
 
 Both talk to the same server at the same time, so you can pick one on the day.
 
-**LangSmith**: `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT=board-pack-demo` in
-`.env`. A board pack run is one trace: the orchestrator, four parallel `task` runs named after the
-analysts, then the auditor and the publisher, each with its tools and a `MicroVM clone` span.
+**LangSmith**: set the variables in `.env`:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=board-pack-demo
+```
+
+- Open <https://smith.langchain.com>, sign in and open the project named in `LANGSMITH_PROJECT` (`default` when it is unset).
+- A board pack run is one trace: the orchestrator, four parallel `task` runs named after the analysts, then the auditor and the publisher, each with its tools and a `MicroVM clone` span.
 
 **Opening the result**: `export_board_pack` copies the HTML to
 `outputs/<thread>/board-pack.html` and opens it in the browser (`BOARD_PACK_OPEN=0` to turn that off).

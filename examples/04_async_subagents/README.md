@@ -245,3 +245,16 @@ What is different from local mode:
   uv run scripts/delete_all.py        # list
   uv run scripts/delete_all.py --yes  # delete
   ```
+
+## LangSmith traces
+
+Optional. Set these in `.env` and run the example as above:
+
+```bash
+# .env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=async-subagents      # unset: the project is `default`
+```
+
+To read the traces, open <https://smith.langchain.com>, sign in and open the project named in `LANGSMITH_PROJECT`. The supervisor's runs (the server `langgraph dev` starts) are traces.

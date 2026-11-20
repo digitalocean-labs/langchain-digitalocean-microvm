@@ -260,9 +260,10 @@ Three things differ from `run_script.py`:
 # .env
 LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=...
-LANGSMITH_PROJECT=...
+LANGSMITH_PROJECT=...      # unset: the project is `default`
 ```
 
+- Open <https://smith.langchain.com>, sign in and open the project named in `LANGSMITH_PROJECT` (`default` when it is unset).
 - `run_script.py` and `langgraph dev` both read them, and `prepare.py` reports whether tracing is on.
 - Each run on a thread is a trace of its own (the alert, the resume after your answer, the follow-up), grouped in LangSmith under the thread's id.
 - A trace shows the commander, each subagent's `task` as a nested run with its tool calls, and a `MicroVM clone` (or `MicroVM resume`) span where a task first uses its MicroVM.
