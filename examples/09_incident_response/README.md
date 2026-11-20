@@ -8,6 +8,7 @@ the length of the run (below). Local mode needs none of it.
 **Quick run** (local mode: no DigitalOcean account, and the agent's commands run on this machine; needs a model key):
 
 ```bash
+# in terminal #1 run (setup, pre-flight, then the live dashboard):
 git clone https://github.com/digitalocean-labs/langchain-digitalocean-microvm
 cd langchain-digitalocean-microvm
 uv sync --all-extras    # needs uv: https://docs.astral.sh/uv/
@@ -16,11 +17,17 @@ cp -n .env.example .env # then set a model key in .env, one of:
                         #     anthropic-claude-haiku-4.5 and anthropic-claude-4.6-sonnet
                         #   ANTHROPIC_API_KEY: Anthropic (other providers: EXAMPLES_MODEL, see ../README.md)
 export DO_MICROVM_TRANSPORT=local
-uv run examples/09_incident_response/prepare.py --clean
-uv run examples/09_incident_response/run_script.py --approve
+uv run examples/09_incident_response/prepare.py --clean   # pre-flight checks; ends with READY
+uv run examples/09_incident_response/dashboard.py
+
+# in terminal #2 run, from the repository root (the alert, the approval prompt, the follow-up):
+export DO_MICROVM_TRANSPORT=local
+uv run examples/09_incident_response/run_script.py
 ```
 
-The live dashboard, prompts and real MicroVMs: see Run below.
+`run_script.py --approve` answers every approval request without asking. For a run on real MicroVMs,
+`uv run python scripts/check_setup.py --examples 09` lists what is still missing, and
+`uv run python scripts/setup_examples.py --examples 09` sets it up (see Run (real mode) below).
 
 ## Overview
 
