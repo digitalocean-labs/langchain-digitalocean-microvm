@@ -100,12 +100,23 @@ DO_MICROVM_TRANSPORT=local uv run --with matplotlib examples/08_board_pack/run_s
 
 ## Run (real MicroVMs)
 
-From the repository root, after `uv sync --all-extras`, with a model configured and `DO_MICROVM_API_TOKEN`,
-`DO_MICROVM_ACCESS_TOKEN` + `DO_MICROVM_IMAGE` (the root sandbox image from `scripts/build_sandbox_image.py`). To set them up step by step:
+From the repository root, after `uv sync --all-extras`, with these in `.env` (the image is the root sandbox image from
+`scripts/build_sandbox_image.py`):
+
+```bash
+# .env
+DO_MICROVM_API_TOKEN=...      # microvm:create/read/update/delete
+DO_MICROVM_ACCESS_TOKEN=...   # microvm:access only (the sandboxes' HTTPS endpoints)
+DO_MICROVM_IMAGE=registry.digitalocean.com/<registry>/microvm-sandbox:<tag>
+DO_MODEL_ACCESS_KEY=...       # or EXAMPLES_MODEL plus that provider's key
+```
+
+To set them up step by step:
 
 ```bash
 uv run python scripts/setup_examples.py
 uv run python scripts/setup_examples.py --dry-run   # checks only
+uv run python scripts/check_setup.py --examples 08   # ready, ready* (also needs the setup named) or what is missing
 ```
 
 Then:

@@ -205,6 +205,7 @@ changed) and the broker URL (it prints the tunnel command and asks for the URL):
 ```bash
 uv run python scripts/setup_examples.py --examples 12
 uv run python scripts/setup_examples.py --examples 12 --dry-run   # checks only
+uv run python scripts/check_setup.py --examples 12   # ready, ready* (also needs the setup named) or what is missing
 ```
 
 By hand:
