@@ -4,6 +4,7 @@
 
 **Changed**
 
+- Examples 03, 04 and 07 say how to open their `langgraph dev` server in Studio and agent-chat-ui, as 08 to 11 do.
 - Examples 01, 05, 06, 07, 08 and 11 have a "Run (local mode)" and a "Run (real MicroVMs)" section, as 03, 09, 10 and 12 do.
 
 ## 0.2.1

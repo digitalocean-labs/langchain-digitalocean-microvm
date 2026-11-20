@@ -135,6 +135,11 @@ cd examples/07_sales_assistant && uv run langgraph dev --n-jobs-per-worker 10
 uv run examples/07_sales_assistant/mail_server/send_to_inbox.py --reset   # a fresh RFQ in the inbox
 ```
 
+- **Studio**: open the URL `langgraph dev` prints (`https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024`);
+  it asks you to sign in to LangSmith in the browser.
+- **agent-chat-ui**: open <https://agentchat.vercel.app>, Deployment URL `http://localhost:2024`, Assistant / Graph ID
+  `agent`, no API key for a local server. With `TAVILY_API_KEY` set, the server also serves `newsletter-agent` (below).
+
 ### Weekly newsletter (optional)
 
 With `TAVILY_API_KEY` set, the assistant also launches `newsletter-agent` (the second graph in
