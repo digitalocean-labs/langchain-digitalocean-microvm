@@ -97,6 +97,7 @@ Set up the variables below step by step:
 ```bash
 uv run python scripts/setup_examples.py
 uv run python scripts/setup_examples.py --dry-run   # checks only
+uv run python scripts/check_setup.py --examples 03   # ready, ready* (also needs the setup named) or what is missing
 ```
 
 By hand:

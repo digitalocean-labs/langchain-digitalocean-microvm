@@ -182,6 +182,7 @@ Set up what follows step by step: the tokens, the model key, `DO_MICROVM_HOST_MO
 ```bash
 uv run python scripts/setup_examples.py --examples 04
 uv run python scripts/setup_examples.py --examples 04 --dry-run   # checks only
+uv run python scripts/check_setup.py --examples 04   # ready, ready* (also needs the setup named) or what is missing
 ```
 
 By hand:

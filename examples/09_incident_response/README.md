@@ -149,6 +149,7 @@ and runs `setup_droplet.py` and `prepare.py`. `--dry-run` only checks what is se
 ```bash
 uv run python scripts/setup_examples.py --examples 09
 uv run python scripts/setup_examples.py --examples 09 --dry-run   # checks only
+uv run python scripts/check_setup.py --examples 09   # ready, ready* (also needs the setup named) or what is missing
 ```
 
 The steps by hand:

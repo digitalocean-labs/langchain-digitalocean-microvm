@@ -35,6 +35,7 @@ From a checkout of this repository, set up the tokens, the image and the `dcode`
 ```bash
 uv run python scripts/setup_examples.py --examples 02
 uv run python scripts/setup_examples.py --examples 02 --dry-run   # checks only
+uv run python scripts/check_setup.py --examples 02   # ready, ready* (also needs the setup named) or what is missing
 uv run dcode --sandbox microvm
 ```
 
