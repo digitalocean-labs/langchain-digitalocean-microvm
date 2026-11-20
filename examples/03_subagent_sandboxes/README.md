@@ -74,12 +74,17 @@ checks the numbers and writes `/outputs/review.md`. After each turn the script
 lists the files in each sandbox. Local sandboxes are directories under
 `$TMPDIR/microvm_sandbox_local/<thread>-<subagent>/`.
 
-Or in LangGraph Studio:
+Or with `langgraph dev`, in LangGraph Studio or agent-chat-ui:
 
 ```bash
 cd examples/03_subagent_sandboxes
-uv run langgraph dev
+uv run langgraph dev     # graph id: agent
 ```
+
+- **Studio**: open the URL `langgraph dev` prints (`https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024`);
+  it asks you to sign in to LangSmith in the browser.
+- **agent-chat-ui**: open <https://agentchat.vercel.app>, Deployment URL `http://localhost:2024`, Assistant / Graph ID
+  `agent`, no API key for a local server.
 
 `langgraph dev` loads the repository's `.env` (`env` in `langgraph.json`) and its values replace the shell's, so set
 `DO_MICROVM_TRANSPORT=local` in `.env` (a variable set on the command line has no effect there), or point `env` at
