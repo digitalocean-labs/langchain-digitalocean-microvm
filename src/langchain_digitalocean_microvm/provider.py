@@ -386,9 +386,21 @@ class MicroVMLifecycle:
             return SandboxTemplate(name, key, key, built=False) if ready else None
         checkpoint_name = microvm_name(TEMPLATE_PREFIX, f"{name}-{digest}")
         for checkpoint in self._client_or_raise().list_checkpoints():
-            if checkpoint.name == checkpoint_name and checkpoint.available:
+            if checkpoint.name == checkpoint_name and checkpoint.available and self._restorable(checkpoint):
                 return SandboxTemplate(name, checkpoint_name, checkpoint.id, built=False)
         return None
+
+    def _restorable(self, checkpoint: Checkpoint) -> bool:
+        """False for a checkpoint with credentials whose origin MicroVM is gone (the service still lists it)."""
+        if not checkpoint.has_credentials:
+            return True
+        if checkpoint.microvm_id is None:
+            return False
+        try:
+            origin = self._client_or_raise().get(checkpoint.microvm_id)
+        except MicroVMNotFoundError:
+            return False
+        return origin.status not in (MicroVMStatus.TERMINATING, MicroVMStatus.TERMINATED)
 
     def delete_template(self, template: SandboxTemplate) -> None:
         """Delete a template's checkpoint, and the MicroVM it was taken from if that was kept.
@@ -546,7 +558,7 @@ class MicroVMLifecycle:
                     http_port=self.config.http_port,
                     idle_timeout=self.config.idle_timeout,
                     tags=[MANAGED_TAG, id_tag(sandbox_id), *namespace_tags(self.config.namespace), *tags],
-                    egress_policy=egress,
+                    egress_policy=egress.for_image(self.config.image or "") if egress is not None else None,
                 ),
                 True,
             )
@@ -584,8 +596,12 @@ class MicroVMLifecycle:
                 self._delete_template_checkpoint(checkpoint)
         else:
             for checkpoint in existing:
-                if checkpoint.available:
+                if not checkpoint.available:
+                    continue
+                if self._restorable(checkpoint):
                     return SandboxTemplate(name, checkpoint_name, checkpoint.id, built=False)
+                logger.warning("Template %r: the MicroVM it was taken from is gone with its credentials; rebuilding", name)
+                self._delete_template_checkpoint(checkpoint)
 
         build_name = microvm_name(TEMPLATE_BUILD_PREFIX, f"{name}-{digest}")
         state = client.get_by_name(build_name)  # left over from an interrupted build
@@ -599,7 +615,7 @@ class MicroVMLifecycle:
                     http_port=self.config.http_port,
                     idle_timeout=self.config.idle_timeout,
                     tags=[MANAGED_TAG, TEMPLATE_PREFIX, *namespace_tags(self.config.namespace)],
-                    egress_policy=egress,
+                    egress_policy=egress.for_image(self.config.image or "") if egress is not None else None,
                 )
         keep_origin = False
         try:
@@ -618,10 +634,19 @@ class MicroVMLifecycle:
                         f"template {name!r}: setup command failed (exit {result.exit_code}): {command}\n"
                         f"{result.output[-2000:]}"
                     )
-            checkpoint = client.create_checkpoint(state.id, name=checkpoint_name)
-            checkpoint = client.wait_for_checkpoint(checkpoint.id, timeout=max(self.config.ready_timeout, 300.0))
-            if not checkpoint.available:
-                raise SandboxError(f"template {name!r}: checkpoint {checkpoint.id} ended {checkpoint.status}")
+            for attempt in (1, 2):  # a failed capture is tried once more
+                checkpoint = client.create_checkpoint(state.id, name=checkpoint_name)
+                checkpoint = client.wait_for_checkpoint(checkpoint.id, timeout=max(self.config.ready_timeout, 300.0))
+                if checkpoint.available:
+                    break
+                reason = checkpoint.raw.get("failure_reason") or "no reason given"
+                if checkpoint.status != "CHECKPOINT_FAILED":
+                    raise SandboxError(f"template {name!r}: checkpoint {checkpoint.id} ended {checkpoint.status} ({reason})")
+                with contextlib.suppress(MicroVMNotFoundError):
+                    client.delete_checkpoint(checkpoint.id)
+                if attempt == 2:
+                    raise SandboxError(f"template {name!r}: checkpoint {checkpoint.id} ended {checkpoint.status} ({reason})")
+                logger.warning("Template %r: checkpoint %s failed (%s); trying again", name, checkpoint.id, reason)
             # Deleting the origin would delete its stored credentials, and its checkpoints could no longer be restored.
             keep_origin = bool(egress is not None and egress.credentials)
             if keep_origin:

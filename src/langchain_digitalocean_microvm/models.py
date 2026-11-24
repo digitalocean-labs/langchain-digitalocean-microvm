@@ -104,6 +104,11 @@ class Checkpoint:
     def available(self) -> bool:
         return self.status == "CHECKPOINT_AVAILABLE"
 
+    @property
+    def has_credentials(self) -> bool:
+        """Whether its outbound policy holds credentials (restorable only while its origin MicroVM exists)."""
+        return bool((self.raw.get("egress_policy") or {}).get("credentials"))
+
 
 @dataclass(frozen=True, slots=True)
 class ExecResult:

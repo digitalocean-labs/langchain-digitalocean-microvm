@@ -19,8 +19,10 @@ from langchain_digitalocean_microvm import (
     OutboundCredential,
 )
 from langchain_digitalocean_microvm.config import egress_from_env
+from langchain_digitalocean_microvm.exceptions import CheckpointUnavailableError
 from langchain_digitalocean_microvm.provider import TEMPLATE_BUILD_PREFIX
 from langchain_digitalocean_microvm.status import MicroVMStatus
+from langchain_digitalocean_microvm.template_cache import TemplateCache
 from langchain_digitalocean_microvm.transport.local import LocalTransport
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
@@ -246,3 +248,61 @@ def test_local_mode_warns_that_the_policy_is_not_applied(caplog: pytest.LogCaptu
         lifecycle.get_or_create(sandbox_id="a")
         lifecycle.get_or_create(sandbox_id="b")
     assert sum("does not apply an egress policy" in r.message for r in caplog.records) == 1
+
+
+# ---------------------------------------------------------------- a template whose origin was deleted
+
+
+def _credentials_template(client: FakeMicroVMClient):
+    lifecycle = _real(client)
+    policy = EgressPolicy.allow_all().with_credential("https://api.example.com", secret="k")
+    template = lifecycle.build_template("analyst", egress=policy)
+    (origin,) = client.live()
+    return lifecycle, policy, template, origin
+
+
+def test_a_template_whose_origin_was_deleted_is_not_reused() -> None:
+    client = FakeMicroVMClient()
+    lifecycle, policy, template, origin = _credentials_template(client)
+    client.delete(origin.id)  # by someone else: the service still lists the checkpoint as available
+
+    assert lifecycle.find_template("analyst", egress=policy) is None
+    with pytest.raises(CheckpointUnavailableError):
+        lifecycle.get_or_create(sandbox_id="t1", template=template)
+    rebuilt = lifecycle.build_template("analyst", egress=policy)
+
+    assert rebuilt.built and template.checkpoint_id not in {c.id for c in client.list_checkpoints()} - {rebuilt.checkpoint_id}
+    lifecycle.get_or_create(sandbox_id="t1", template=rebuilt)
+
+
+def test_template_cache_rebuilds_when_the_origin_is_gone() -> None:
+    client = FakeMicroVMClient()
+    lifecycle, policy, _, origin = _credentials_template(client)
+    cache = TemplateCache(lambda: lifecycle.build_template("analyst", egress=policy))
+    cache.get()
+    client.delete(origin.id)
+
+    backend = cache.create(lambda t: lifecycle.get_or_create(sandbox_id="t1", template=t))
+
+    assert client.get(backend.id).status is MicroVMStatus.RUNNING
+
+
+def test_the_client_names_an_unrestorable_checkpoint() -> None:
+    message = "the origin MicroVM's egress credentials are incomplete; this checkpoint cannot be restored"
+    rec = Recorder({("POST", "/v2/microvms"): httpx.Response(400, json={"id": "failed_precondition", "message": message})})
+    with pytest.raises(CheckpointUnavailableError, match="cannot be restored"):
+        make_client(rec).create(name="x", checkpoint_id="cp")
+
+
+def test_a_docr_image_gets_the_registry_token_host_under_deny() -> None:
+    docr = "registry.digitalocean.com/team/sandbox:1"
+    assert EgressPolicy.allow("pypi.org").for_image(docr).rules == ("pypi.org", "api.digitalocean.com")
+    assert EgressPolicy.deny_all().for_image(docr).rules == ("api.digitalocean.com",)
+    assert EgressPolicy.allow_all().for_image(docr) == EgressPolicy.allow_all()
+    assert EgressPolicy.allow("pypi.org").for_image("docker.io/library/python:3.12") == EgressPolicy.allow("pypi.org")
+
+    client = FakeMicroVMClient()
+    lifecycle = _real(client, image=docr)
+    lifecycle.get_or_create(sandbox_id="a", egress=EgressPolicy.allow("pypi.org"))
+    lifecycle.build_template("analyst", egress=EgressPolicy.deny_all())
+    assert [c["egress_policy"].rules for c in client.created] == [("pypi.org", "api.digitalocean.com"), ("api.digitalocean.com",)]

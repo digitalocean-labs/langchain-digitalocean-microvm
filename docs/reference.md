@@ -135,12 +135,19 @@ policy = EgressPolicy.allow("pypi.org").with_credential("https://api.example.com
   checkpoint whose credentials are gone cannot be restored; a template whose policy has credentials
   therefore keeps its temporary MicroVM, paused (`microvm-template-build-*`; it counts against the team
   limit). `delete_template` deletes both, and `scripts/delete_all.py` keeps both unless
-  `--include-templates`.
+  `--include-templates`. The service still lists such a checkpoint as available after its MicroVM is
+  deleted, so `find_template` and `build_template` check that the MicroVM exists: `find_template`
+  returns `None` and `build_template` deletes the checkpoint and builds a new one. A clone of it fails
+  with `CheckpointUnavailableError` (a `MicroVMNotFoundError`, so `TemplateCache` rebuilds the template).
 - **Inside the MicroVM**: outbound traffic goes through a platform proxy set in `HTTP_PROXY` and
   `HTTPS_PROXY`; only HTTP and HTTPS from clients that use those variables reach a destination (no SSH,
   database or other TCP and UDP connections). For a host with a credential the platform presents a
   certificate from its own certificate authority, which `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`,
   `CURL_CA_BUNDLE` and `NODE_EXTRA_CA_CERTS` point to; clients that pin certificates fail for that host.
+- **Images in DigitalOcean Container Registry**: pulling one fetches a registry token from
+  `api.digitalocean.com`, so for a `registry.digitalocean.com/...` image the package adds that host to a
+  policy whose default action is `deny` (`EgressPolicy.for_image`). Code in the MicroVM can then reach the
+  DigitalOcean API, with whatever token it has; the package puts no DigitalOcean token into a sandbox.
 - **Service conditions**: public networking only; credentials only in the regions the MicroVMs
   documentation lists and only on a create from an image.
 - **Local mode** applies no policy and logs a warning.

@@ -35,6 +35,10 @@ MAX_RULES = 50
 MAX_CREDENTIALS = 16
 MAX_SECRET_LENGTH = 8192
 
+# Pulling an image from DigitalOcean Container Registry fetches a registry token from the DigitalOcean API.
+DOCR_HOST = "registry.digitalocean.com"
+DOCR_AUTH_HOST = "api.digitalocean.com"
+
 _LABEL = r"(?!-)[a-z0-9-]{1,63}(?<!-)"
 _HOSTNAME = re.compile(rf"^{_LABEL}(\.{_LABEL})+$")
 
@@ -184,6 +188,14 @@ class EgressPolicy:
         if self.default_action == "deny" and credential.host not in rules:
             rules = (*rules, credential.host)
         return replace(self, rules=rules, credentials=(*self.credentials, credential))
+
+    def for_image(self, oci_ref: str) -> EgressPolicy:
+        """This policy as sent with `oci_ref`: for a DigitalOcean Container Registry image under
+        `default_action="deny"`, `api.digitalocean.com` is added to the rules, since the image pull
+        fetches its registry token there."""
+        if self.default_action != "deny" or oci_ref.split("/", 1)[0].lower() != DOCR_HOST or self.allows(DOCR_AUTH_HOST):
+            return self
+        return replace(self, rules=(*self.rules, DOCR_AUTH_HOST))
 
     def allows(self, host: str) -> bool:
         """Whether a connection to `host` is allowed by this policy's rules or default action."""

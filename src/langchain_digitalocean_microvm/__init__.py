@@ -16,6 +16,7 @@ from langchain_digitalocean_microvm.client import MicroVMClient
 from langchain_digitalocean_microvm.config import MicroVMConfig
 from langchain_digitalocean_microvm.egress import EgressPolicy, OutboundCredential
 from langchain_digitalocean_microvm.exceptions import (
+    CheckpointUnavailableError,
     HostCapacityError,
     HostNotReadyError,
     MicroVMAlreadyExistsError,
@@ -81,6 +82,7 @@ __all__ = [
     "MicroVMForbiddenError",
     "MicroVMRateLimitError",
     "MicroVMNotFoundError",
+    "CheckpointUnavailableError",
     "MicroVMAlreadyExistsError",
     "MicroVMAPIError",
     "SandboxError",

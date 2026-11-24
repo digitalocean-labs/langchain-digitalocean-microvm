@@ -44,6 +44,7 @@ import httpx
 
 from langchain_digitalocean_microvm.egress import EgressPolicy
 from langchain_digitalocean_microvm.exceptions import (
+    CheckpointUnavailableError,
     MicroVMAlreadyExistsError,
     MicroVMAPIError,
     MicroVMClientError,
@@ -378,7 +379,12 @@ class MicroVMClient:
             payload["networking"] = networking
         if vpc_uuid is not None:
             payload["vpc_uuid"] = vpc_uuid
-        response = self._request("POST", "/microvms", json=payload)
+        try:
+            response = self._request("POST", "/microvms", json=payload)
+        except MicroVMAPIError as exc:
+            if checkpoint_id is not None and exc.status_code == 400 and "cannot be restored" in exc.message:
+                raise CheckpointUnavailableError(exc.message) from exc  # its origin's credentials were deleted
+            raise
         return _parse_microvm(self._unwrap(response, "microvm"))
 
     def get(self, microvm_id: str) -> MicroVMState:
