@@ -71,13 +71,14 @@ temporary MicroVM from `DO_MICROVM_IMAGE` (tags `microvm-sandbox`, `microvm-temp
 the seed files, runs each setup command through `execute` (detached and polled, so long
 `pip install`s are fine; `setup_timeout`, default 900 s, per command; a non-zero exit raises),
 checkpoints it as `microvm-template-<name>-<hash>` and deletes the temporary MicroVM. The hash
-covers the name, image, size, port, setup commands and seed files (path and content), so the
+covers the name, image, size, port, setup commands, seed files (path and content) and outbound policy, so the
 same inputs reuse an AVAILABLE checkpoint and any change builds a new one. It returns a
 `SandboxTemplate` (`name`, `checkpoint_name`, `checkpoint_id`, `built`).
 `get_or_create(sandbox_id, template=t)` creates a missing sandbox from the checkpoint (it
 inherits image, size, region, port and environment; `DO_MICROVM_IMAGE` is not needed) and
 reuses an existing one unchanged. `find_template(name, setup=..., seed_files=...)` returns the template
-those inputs would reuse, or `None`, without building one; `delete_template(t)` deletes the checkpoint;
+those inputs would reuse, or `None`, without building one; `delete_template(t)` deletes the checkpoint
+(and a kept temporary MicroVM, see [Outbound policy](#outbound-policy-egress-rules-and-credentials));
 `scripts/delete_all.py --yes --include-templates --all-owners` deletes every `microvm-template-*` checkpoint
 (without `--include-templates` it keeps them; templates are shared by every user and namespace, so it needs
 `--all-owners`, and `--all-namespaces` once a namespace is set or other namespaces have MicroVMs on the team). Local mode stores a
@@ -91,6 +92,58 @@ retries a clone once if its checkpoint was deleted meanwhile (the API answers a 
 `MicroVMNotFoundError`): `refresh(stale)` rebuilds it, once even when several threads fail at the
 same moment, and `build_template` reuses the checkpoint if it still exists. Other errors are
 raised at once (`retry_on` widens the set). Examples 07 and 08 use it.
+
+## Outbound policy (egress rules and credentials)
+
+A MicroVM's outbound policy limits the destinations it can connect to and can hold credentials the
+platform adds to its requests ([How to Restrict a MicroVM's Outbound
+Traffic](https://docs.digitalocean.com/products/microvms/how-to/restrict-outbound-traffic/)). The
+policy is set at create and cannot change; a MicroVM created from a checkpoint inherits it.
+`EgressPolicy` (`egress.py`) describes one:
+
+```python
+from langchain_digitalocean_microvm import EgressPolicy
+
+EgressPolicy.allow("pypi.org", "files.pythonhosted.org", "*.example.org", "203.0.113.5")  # everything else denied
+EgressPolicy.deny_all()
+EgressPolicy.allow_all()  # traffic still goes through the platform proxy, so credentials apply
+policy = EgressPolicy.allow("pypi.org").with_credential("https://api.example.com/v1", secret=api_key)
+```
+
+- **Rules**: up to 50, each an exact hostname, a `*.` wildcard (which does not match the domain
+  itself) or an IPv4 address; no scheme, port, path or CIDR range. `default_action` (`deny` for
+  `allow()` and `deny_all()`) applies to every destination no rule matches.
+- **Credentials**: up to 16, at most one per host. `with_credential(url, secret=..., scheme="bearer")`
+  binds a secret to the URL's exact host and path prefix and adds the host to the rules. The platform
+  sets the `Authorization` header of HTTPS requests to that host and prefix to `Bearer <secret>`
+  (`scheme="raw"`: the secret itself); code in the MicroVM does not set that header for the host. The secret is stored outside the
+  MicroVM and the API never returns it. A response that echoes request headers contains the secret, so
+  bind a credential to the narrowest prefix that works. `repr()` never shows a secret.
+- **Where it applies**: `MicroVMConfig.egress` is the default for every sandbox and template created
+  from the image; `get_or_create(..., egress=...)` and `build_template(..., egress=...)` override it. A
+  sandbox created from a template has the template's policy, so `get_or_create` refuses `egress`
+  together with `template`. An existing sandbox keeps the policy it was created with. The
+  deepagents-code provider takes `egress` as an `EgressPolicy` or a `DO_MICROVM_EGRESS` string.
+- **Environment**: `DO_MICROVM_EGRESS` is `none` (deny every destination), `*` (allow every one) or a
+  comma-separated list of destinations. `DO_MICROVM_EGRESS_CREDENTIALS` is a comma-separated list of
+  `https-url=VARIABLE` items; each secret is read from the variable named after `=`. Credentials without
+  `DO_MICROVM_EGRESS` allow every destination.
+- **Templates**: `build_template` creates its temporary MicroVM with the policy, so `setup` commands run
+  under it: allow the hosts they download from (pip: `pypi.org` and `files.pythonhosted.org`). The policy
+  is part of the template's hash (secrets through an HMAC keyed with the API token), so a changed secret
+  builds a new template. The service deletes a MicroVM's stored credentials with the MicroVM, and a
+  checkpoint whose credentials are gone cannot be restored; a template whose policy has credentials
+  therefore keeps its temporary MicroVM, paused (`microvm-template-build-*`; it counts against the team
+  limit). `delete_template` deletes both, and `scripts/delete_all.py` keeps both unless
+  `--include-templates`.
+- **Inside the MicroVM**: outbound traffic goes through a platform proxy set in `HTTP_PROXY` and
+  `HTTPS_PROXY`; only HTTP and HTTPS from clients that use those variables reach a destination (no SSH,
+  database or other TCP and UDP connections). For a host with a credential the platform presents a
+  certificate from its own certificate authority, which `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`,
+  `CURL_CA_BUNDLE` and `NODE_EXTRA_CA_CERTS` point to; clients that pin certificates fail for that host.
+- **Service conditions**: public networking only; credentials only in the regions the MicroVMs
+  documentation lists and only on a create from an image.
+- **Local mode** applies no policy and logs a warning.
 
 ## Thread sandboxes (one MicroVM per conversation thread)
 
@@ -521,7 +574,7 @@ deepagents-code `SandboxProvider` over `MicroVMLifecycle`, registered as the
 dcode imports it; this package does not depend on deepagents-code.
 `get_or_create(sandbox_id=None)` creates `dcode-<hex>`; dcode reports and later
 deletes a sandbox by `backend.id` (the MicroVM id), so both ids work everywhere.
-Options: `seed_files`, `tags`; anything else is refused. Its tests run where
+Options: `seed_files`, `tags`, `egress` (an `EgressPolicy` or a `DO_MICROVM_EGRESS` string); anything else is refused. Its tests run where
 deepagents-code is installed:
 `uv run pytest tests/unit_tests/test_deepagents_code_provider.py` (the `test` dependency group installs deepagents-code).
 

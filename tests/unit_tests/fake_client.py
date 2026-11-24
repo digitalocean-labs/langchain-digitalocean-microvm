@@ -36,6 +36,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from langchain_digitalocean_microvm.client import MANAGED_TAG
+from langchain_digitalocean_microvm.egress import EgressPolicy
 from langchain_digitalocean_microvm.exceptions import (
     MicroVMAlreadyExistsError,
     MicroVMAPIError,
@@ -157,7 +158,10 @@ class FakeMicroVMClient:
                region: str | None = None, size: MicroVMSize | None = None, http_port: int | None = None,
                http_protocol: str | None = None, environment: dict[str, str] | None = None,
                tags: list[str] | None = None, idle_timeout: str | None = None, auto_resume: bool | None = None,
-               networking: str | None = None, vpc_uuid: str | None = None) -> MicroVMState:
+               networking: str | None = None, vpc_uuid: str | None = None,
+               egress_policy: EgressPolicy | None = None) -> MicroVMState:
+        if checkpoint_id is not None and egress_policy is not None:
+            raise ValueError("a MicroVM created from a checkpoint inherits its egress policy; do not pass one")
         payload = {k: v for k, v in locals().items() if k != "self"}
         with self._lock:
             self._creates_in_flight += 1

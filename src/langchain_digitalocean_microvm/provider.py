@@ -60,6 +60,7 @@ from langchain_digitalocean_microvm.client import (
     sandbox_id_from_tags,
 )
 from langchain_digitalocean_microvm.config import MicroVMConfig
+from langchain_digitalocean_microvm.egress import EgressPolicy
 from langchain_digitalocean_microvm.exceptions import (
     MicroVMAlreadyExistsError,
     MicroVMAPIError,
@@ -67,7 +68,7 @@ from langchain_digitalocean_microvm.exceptions import (
     SandboxError,
     SandboxNotFoundError,
 )
-from langchain_digitalocean_microvm.models import MicroVMState
+from langchain_digitalocean_microvm.models import Checkpoint, MicroVMState
 from langchain_digitalocean_microvm.namespace import (
     namespace_from_tags,
     namespace_tags,
@@ -103,18 +104,26 @@ class SandboxTemplate:
     """
 
     name: str
-    checkpoint_name: str  # includes a hash of image, size, setup and seed files
+    checkpoint_name: str  # includes a hash of image, size, setup, seed files and outbound policy
     checkpoint_id: str  # local mode: the template's directory key
     built: bool  # True if this call built it, False if an existing one was reused
 
 
-def _template_digest(name: str, config: MicroVMConfig, setup: Sequence[str], seed_files: Sequence[tuple[str, bytes]]) -> str:
+def _template_digest(
+    name: str,
+    config: MicroVMConfig,
+    setup: Sequence[str],
+    seed_files: Sequence[tuple[str, bytes]],
+    egress: EgressPolicy | None,
+) -> str:
     """Changes whenever anything that shapes the template does, so a stale checkpoint is never reused."""
     digest = hashlib.sha256()
     for part in (name, config.image or "", repr(config.size), str(config.http_port), *setup):
         digest.update(part.encode() + b"\0")
     for path, content in seed_files:
         digest.update(path.encode() + b"\0" + hashlib.sha256(content).digest())
+    if egress is not None:  # the secrets enter keyed with the API token, so the name reveals nothing about them
+        digest.update(b"egress\0" + egress.digest((config.api_token or "").encode()).encode())
     return digest.hexdigest()[:10]
 
 
@@ -168,6 +177,7 @@ class MicroVMLifecycle:
         # Bounds the get-or-create calls (creates and resumes) in flight, whoever calls them.
         limit = self.config.max_concurrent_creates
         self._creates = threading.BoundedSemaphore(limit) if limit else None
+        self._warned_local_egress = False
 
     # ------------------------------------------------------------------
     # public sync API
@@ -180,12 +190,18 @@ class MicroVMLifecycle:
         seed_files: list[tuple[str, bytes]] | None = None,
         tags: Sequence[str] = (),
         template: SandboxTemplate | None = None,
+        egress: EgressPolicy | None = None,
     ) -> MicroVMSandbox:
         """Return a connected MicroVMSandbox for `sandbox_id`, creating one if needed.
 
         With `template` (`build_template`), a sandbox this call creates is
         cloned from the template's checkpoint instead of booted from the image;
         an existing sandbox is reused as it is, like `seed_files`.
+
+        `egress` is the outbound policy of a sandbox this call creates from the
+        image (default: `config.egress`). A sandbox created from a template has
+        the template's policy, so `egress` and `template` cannot be combined. An
+        existing sandbox keeps the policy it was created with.
 
         `seed_files` is uploaded (via MicroVMSandbox.upload_files) only
         when this call is the one that actually created the underlying
@@ -194,12 +210,21 @@ class MicroVMLifecycle:
         create (tags cannot change afterwards); cleanup tooling finds a class
         of sandboxes by them (e.g. subagents.SUBAGENT_SANDBOX_TAG).
         """
+        if egress is not None and template is not None:
+            raise ValueError("a sandbox created from a template has the template's egress policy; pass one or the other")
+        policy = None if template is not None else (egress or self.config.egress)
         with self._create_slot():
             if self.config.transport == "local":
+                self._warn_local_egress(policy)
                 return self._local_get_or_create(sandbox_id=sandbox_id, seed_files=seed_files, template=template)
             return self._real_get_or_create(
-                sandbox_id=sandbox_id, seed_files=seed_files, tags=tuple(tags), template=template
+                sandbox_id=sandbox_id, seed_files=seed_files, tags=tuple(tags), template=template, egress=policy
             )
+
+    def _warn_local_egress(self, policy: EgressPolicy | None) -> None:
+        if policy is not None and not self._warned_local_egress:
+            self._warned_local_egress = True
+            logger.warning("transport='local' does not apply an egress policy: commands use this machine's network")
 
     def _create_slot(self) -> AbstractContextManager[Any]:
         """A slot of `config.max_concurrent_creates` (a no-op without a limit), held while provisioning."""
@@ -314,6 +339,7 @@ class MicroVMLifecycle:
         seed_files: Sequence[tuple[str, bytes]] = (),
         rebuild: bool = False,
         setup_timeout: int = DEFAULT_SETUP_TIMEOUT,
+        egress: EgressPolicy | None = None,
     ) -> SandboxTemplate:
         """Prepare a sandbox once and checkpoint it, so new sandboxes start from it warm.
 
@@ -324,14 +350,24 @@ class MicroVMLifecycle:
         unless `rebuild=True`. Checkpoints outlive their MicroVM and do not
         count as MicroVMs; `delete_template` removes one.
 
+        `egress` (default: `config.egress`) is the outbound policy of the
+        temporary MicroVM, so `setup` runs under it, and every sandbox created
+        from the template inherits it. A policy with credentials keeps the
+        temporary MicroVM, paused: a checkpoint cannot be restored once the
+        MicroVM it came from is deleted with its credentials. `delete_template`
+        deletes it with the checkpoint.
+
         Local mode copies a directory instead and does NOT run `setup` (the
         commands would run on this machine); only `seed_files` are applied.
         """
-        digest = _template_digest(name, self.config, setup, seed_files)
+        policy = egress or self.config.egress
+        digest = _template_digest(name, self.config, setup, seed_files, policy)
         if self.config.transport == "local":
+            self._warn_local_egress(policy)
             return self._local_build_template(name, digest, setup=setup, seed_files=seed_files, rebuild=rebuild)
         return self._real_build_template(
-            name, digest, setup=setup, seed_files=seed_files, rebuild=rebuild, setup_timeout=setup_timeout
+            name, digest, setup=setup, seed_files=seed_files, rebuild=rebuild, setup_timeout=setup_timeout,
+            egress=policy,
         )
 
     def find_template(
@@ -340,9 +376,10 @@ class MicroVMLifecycle:
         *,
         setup: Sequence[str] = (),
         seed_files: Sequence[tuple[str, bytes]] = (),
+        egress: EgressPolicy | None = None,
     ) -> SandboxTemplate | None:
         """The template `build_template` would reuse for these inputs, or None; never builds one."""
-        digest = _template_digest(name, self.config, setup, seed_files)
+        digest = _template_digest(name, self.config, setup, seed_files, egress or self.config.egress)
         if self.config.transport == "local":
             key = f"{TEMPLATE_PREFIX}-{name}-{digest}"
             ready = (root_for_host(key).parent / f"{key}.ready").exists()
@@ -354,15 +391,41 @@ class MicroVMLifecycle:
         return None
 
     def delete_template(self, template: SandboxTemplate) -> None:
-        """Delete a template's checkpoint (sandboxes created from it are not affected)."""
+        """Delete a template's checkpoint, and the MicroVM it was taken from if that was kept.
+
+        Sandboxes created from it are not affected.
+        """
         if self.config.transport == "local":
             shutil.rmtree(root_for_host(template.checkpoint_id), ignore_errors=True)
             (root_for_host(template.checkpoint_id).parent / f"{template.checkpoint_id}.ready").unlink(missing_ok=True)
             return
+        client = self._client_or_raise()
         try:
-            self._client_or_raise().delete_checkpoint(template.checkpoint_id)
+            checkpoint = client.get_checkpoint(template.checkpoint_id)
+        except MicroVMNotFoundError:
+            return
+        self._delete_template_checkpoint(checkpoint)
+
+    def _delete_template_checkpoint(self, checkpoint: Checkpoint) -> None:
+        """Delete a template checkpoint, then its origin MicroVM if one was kept (a policy with credentials)."""
+        client = self._client_or_raise()
+        try:
+            client.delete_checkpoint(checkpoint.id)
         except MicroVMNotFoundError:
             pass
+        if checkpoint.microvm_id is None:
+            return
+        try:
+            origin = client.get(checkpoint.microvm_id)
+        except MicroVMNotFoundError:
+            return
+        if origin.name.startswith(f"{TEMPLATE_BUILD_PREFIX}-") and origin.status not in (
+            MicroVMStatus.TERMINATING, MicroVMStatus.TERMINATED
+        ):
+            try:
+                client.delete(origin.id)
+            except MicroVMNotFoundError:
+                pass
 
     async def abuild_template(self, name: str, **kwargs: Any) -> SandboxTemplate:
         return await asyncio.to_thread(lambda: self.build_template(name, **kwargs))
@@ -412,20 +475,21 @@ class MicroVMLifecycle:
         seed_files: list[tuple[str, bytes]] | None,
         tags: tuple[str, ...] = (),
         template: SandboxTemplate | None = None,
+        egress: EgressPolicy | None = None,
     ) -> MicroVMSandbox:
         client = self._client_or_raise()
 
         state = client.get_by_name(self._name(sandbox_id))
         freshly_created = False
         if state is None:
-            state, freshly_created = self._create_real(sandbox_id=sandbox_id, tags=tags, template=template)
+            state, freshly_created = self._create_real(sandbox_id=sandbox_id, tags=tags, template=template, egress=egress)
 
         state, freshly_created = settle_to_running(
             client,
             state,
             label=f"sandbox_id={sandbox_id!r}",
             ready_timeout=self.config.ready_timeout,
-            recreate=lambda: self._create_real(sandbox_id=sandbox_id, tags=tags, template=template),
+            recreate=lambda: self._create_real(sandbox_id=sandbox_id, tags=tags, template=template, egress=egress),
             freshly_created=freshly_created,
         )
 
@@ -435,7 +499,12 @@ class MicroVMLifecycle:
         return backend
 
     def _create_real(
-        self, *, sandbox_id: str, tags: tuple[str, ...] = (), template: SandboxTemplate | None = None
+        self,
+        *,
+        sandbox_id: str,
+        tags: tuple[str, ...] = (),
+        template: SandboxTemplate | None = None,
+        egress: EgressPolicy | None = None,
     ) -> tuple[MicroVMState, bool]:
         """Create a fresh, tagged MicroVM (possibly still transitional).
 
@@ -477,6 +546,7 @@ class MicroVMLifecycle:
                     http_port=self.config.http_port,
                     idle_timeout=self.config.idle_timeout,
                     tags=[MANAGED_TAG, id_tag(sandbox_id), *namespace_tags(self.config.namespace), *tags],
+                    egress_policy=egress,
                 ),
                 True,
             )
@@ -502,6 +572,7 @@ class MicroVMLifecycle:
         seed_files: Sequence[tuple[str, bytes]],
         rebuild: bool,
         setup_timeout: int,
+        egress: EgressPolicy | None = None,
     ) -> SandboxTemplate:
         client = self._client_or_raise()
         if not self.config.image:
@@ -510,7 +581,7 @@ class MicroVMLifecycle:
         existing = [c for c in client.list_checkpoints() if c.name == checkpoint_name]
         if rebuild:
             for checkpoint in existing:
-                client.delete_checkpoint(checkpoint.id)
+                self._delete_template_checkpoint(checkpoint)
         else:
             for checkpoint in existing:
                 if checkpoint.available:
@@ -528,7 +599,9 @@ class MicroVMLifecycle:
                     http_port=self.config.http_port,
                     idle_timeout=self.config.idle_timeout,
                     tags=[MANAGED_TAG, TEMPLATE_PREFIX, *namespace_tags(self.config.namespace)],
+                    egress_policy=egress,
                 )
+        keep_origin = False
         try:
             with self._create_slot():
                 state, _ = settle_to_running(
@@ -549,10 +622,18 @@ class MicroVMLifecycle:
             checkpoint = client.wait_for_checkpoint(checkpoint.id, timeout=max(self.config.ready_timeout, 300.0))
             if not checkpoint.available:
                 raise SandboxError(f"template {name!r}: checkpoint {checkpoint.id} ended {checkpoint.status}")
+            # Deleting the origin would delete its stored credentials, and its checkpoints could no longer be restored.
+            keep_origin = bool(egress is not None and egress.credentials)
+            if keep_origin:
+                try:
+                    client.pause(state.id, timeout=self.config.ready_timeout)
+                except Exception:  # noqa: BLE001 - the template is ready; the MicroVM also pauses when idle
+                    logger.warning("Could not pause the origin MicroVM of template %r", name, exc_info=True)
             return SandboxTemplate(name, checkpoint_name, checkpoint.id, built=True)
         finally:
             try:
-                client.delete(state.id)  # the checkpoint outlives it
+                if not keep_origin:
+                    client.delete(state.id)  # the checkpoint outlives it
             except MicroVMNotFoundError:
                 pass
             except Exception:  # noqa: BLE001 - must not mask the build's own outcome

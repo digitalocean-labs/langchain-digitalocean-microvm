@@ -12,7 +12,7 @@ Facts the rest of the package relies on:
   `checkpoints`; list endpoints paginate (`page`, `per_page` <= 200,
   `links.pages.next`).
 - Everything is set at create time (image, size, env, tags, ports, idle
-  timeout, auto-resume); there is no update endpoint.
+  timeout, auto-resume, outbound policy); there is no update endpoint.
 - POST .../pause and .../resume return when the change completes and are
   idempotent, but their response body carries `"tags": []` even for a
   tagged MicroVM, so callers get a fresh GET instead. That GET can still
@@ -42,6 +42,7 @@ from typing import Any
 
 import httpx
 
+from langchain_digitalocean_microvm.egress import EgressPolicy
 from langchain_digitalocean_microvm.exceptions import (
     MicroVMAlreadyExistsError,
     MicroVMAPIError,
@@ -332,12 +333,13 @@ class MicroVMClient:
         auto_resume: bool | None = None,
         networking: str | None = None,
         vpc_uuid: str | None = None,
+        egress_policy: EgressPolicy | None = None,
     ) -> MicroVMState:
         """POST /microvms from an image (`oci_ref`, needs region+size) or a `checkpoint_id`.
 
-        Always adds MANAGED_TAG and the owner tag (owner.py). From a checkpoint, region, size and
-        environment are inherited and must not be sent (the API rejects
-        `environment`).
+        Always adds MANAGED_TAG and the owner tag (owner.py). From a checkpoint, region, size,
+        environment and the outbound policy are inherited and must not be sent (the API rejects
+        `environment`, and an `egress_policy` that differs from the checkpoint's).
         """
         if (oci_ref is None) == (checkpoint_id is None):
             raise ValueError("pass exactly one of oci_ref or checkpoint_id")
@@ -356,9 +358,13 @@ class MicroVMClient:
             payload["size"] = size.to_api()
             if environment:
                 payload["environment"] = dict(environment)
+            if egress_policy is not None:
+                payload["egress_policy"] = egress_policy.to_api()
         else:
             if environment:
                 raise ValueError("a MicroVM created from a checkpoint inherits its environment; do not pass one")
+            if egress_policy is not None:
+                raise ValueError("a MicroVM created from a checkpoint inherits its egress policy; do not pass one")
             payload["source"] = {"checkpoint_id": checkpoint_id}
         if http_port is not None:
             payload["http_port"] = http_port

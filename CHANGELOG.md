@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+**Added**
+
+- `EgressPolicy`: the outbound policy of a MicroVM (allowed destinations and credentials the platform adds to HTTPS requests). Set it with `MicroVMConfig.egress` (`DO_MICROVM_EGRESS`, `DO_MICROVM_EGRESS_CREDENTIALS`), `get_or_create(..., egress=...)`, `build_template(..., egress=...)`, the deepagents-code provider's `egress` option, or `MicroVMClient.create(..., egress_policy=...)`. A template whose policy has credentials keeps its temporary MicroVM, paused; `delete_template` and `scripts/delete_all.py` handle it.
+
 **Changed**
 
 - Every example README's Quick run and the README's "Try it without a DigitalOcean account" start with `git clone` and `uv sync --all-extras`.
