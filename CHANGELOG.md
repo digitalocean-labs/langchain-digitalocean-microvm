@@ -6,11 +6,11 @@
 
 - `EgressPolicy`: the outbound policy of a MicroVM (allowed destinations and credentials the platform adds to HTTPS requests). Set it with `MicroVMConfig.egress` (`DO_MICROVM_EGRESS`, `DO_MICROVM_EGRESS_CREDENTIALS`), `get_or_create(..., egress=...)`, `build_template(..., egress=...)`, the deepagents-code provider's `egress` option, or `MicroVMClient.create(..., egress_policy=...)`. A template whose policy has credentials keeps its temporary MicroVM, paused; `delete_template` and `scripts/delete_all.py` handle it, and `find_template`/`build_template` do not reuse such a template once that MicroVM is gone.
 - `CheckpointUnavailableError` (a `MicroVMNotFoundError`): a create from a checkpoint that can no longer be restored.
-- For an image in DigitalOcean Container Registry, a deny-default policy also allows `api.digitalocean.com`, where the image pull fetches its registry token.
+- For an image in DigitalOcean Container Registry, a deny-default policy also allows `api.digitalocean.com`.
 
 **Changed**
 
-- `build_template` tries a failed checkpoint once more, and its error names the service's `failure_reason`.
+- `build_template` creates a second checkpoint when the first ends `CHECKPOINT_FAILED`, and its error names the service's `failure_reason`.
 - Every example README's Quick run and the README's "Try it without a DigitalOcean account" start with `git clone` and `uv sync --all-extras`.
 - The local-mode Quick run of examples 01, 03, 04 and 08 to 12 starts with the setup it needs: `uv sync --all-extras`, `.env` and a model key (DigitalOcean Serverless Inference or Anthropic), with the models the key needs access to.
 - The Quick run of examples 08 to 11 is split into terminal #1 (setup, pre-flight, the live dashboard) and terminal #2 (the run), and names `check_setup.py` and `setup_examples.py` for a real run.

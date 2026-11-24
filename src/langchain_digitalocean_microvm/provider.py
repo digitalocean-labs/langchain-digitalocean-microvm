@@ -634,7 +634,7 @@ class MicroVMLifecycle:
                         f"template {name!r}: setup command failed (exit {result.exit_code}): {command}\n"
                         f"{result.output[-2000:]}"
                     )
-            for attempt in (1, 2):  # a failed capture is tried once more
+            for attempt in (1, 2):  # a second checkpoint after CHECKPOINT_FAILED
                 checkpoint = client.create_checkpoint(state.id, name=checkpoint_name)
                 checkpoint = client.wait_for_checkpoint(checkpoint.id, timeout=max(self.config.ready_timeout, 300.0))
                 if checkpoint.available:

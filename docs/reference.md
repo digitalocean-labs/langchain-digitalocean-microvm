@@ -113,10 +113,11 @@ policy = EgressPolicy.allow("pypi.org").with_credential("https://api.example.com
 - **Rules**: up to 50, each an exact hostname, a `*.` wildcard (which does not match the domain
   itself) or an IPv4 address; no scheme, port, path or CIDR range. `default_action` (`deny` for
   `allow()` and `deny_all()`) applies to every destination no rule matches.
-- **Credentials**: up to 16, at most one per host. `with_credential(url, secret=..., scheme="bearer")`
+- **Credentials**: up to 16; the package accepts one per host. `with_credential(url, secret=..., scheme="bearer")`
   binds a secret to the URL's exact host and path prefix and adds the host to the rules. The platform
   sets the `Authorization` header of HTTPS requests to that host and prefix to `Bearer <secret>`
-  (`scheme="raw"`: the secret itself); code in the MicroVM does not set that header for the host. The secret is stored outside the
+  (`scheme="raw"`: the secret itself). Code in the MicroVM should not set that header for the host (MicroVMs
+  documentation). The secret is stored outside the
   MicroVM and the API never returns it. A response that echoes request headers contains the secret, so
   bind a credential to the narrowest prefix that works. `repr()` never shows a secret.
 - **Where it applies**: `MicroVMConfig.egress` is the default for every sandbox and template created
@@ -144,10 +145,10 @@ policy = EgressPolicy.allow("pypi.org").with_credential("https://api.example.com
   database or other TCP and UDP connections). For a host with a credential the platform presents a
   certificate from its own certificate authority, which `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`,
   `CURL_CA_BUNDLE` and `NODE_EXTRA_CA_CERTS` point to; clients that pin certificates fail for that host.
-- **Images in DigitalOcean Container Registry**: pulling one fetches a registry token from
-  `api.digitalocean.com`, so for a `registry.digitalocean.com/...` image the package adds that host to a
-  policy whose default action is `deny` (`EgressPolicy.for_image`). Code in the MicroVM can then reach the
-  DigitalOcean API, with whatever token it has; the package puts no DigitalOcean token into a sandbox.
+- **Images in DigitalOcean Container Registry**: for a `registry.digitalocean.com/...` image the package
+  adds `api.digitalocean.com` to a policy whose default action is `deny` (`EgressPolicy.for_image`). Code
+  in the MicroVM can then reach the DigitalOcean API, with whatever token it has; the package puts no
+  DigitalOcean token into a sandbox.
 - **Service conditions**: public networking only; credentials only in the regions the MicroVMs
   documentation lists and only on a create from an image.
 - **Local mode** applies no policy and logs a warning.
