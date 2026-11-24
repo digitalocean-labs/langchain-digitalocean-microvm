@@ -12,7 +12,8 @@ This module is the one place that reads `DO_MICROVM_*` environment variables (a 
 | `DO_MICROVM_IMAGE`, `_HTTP_PORT`, `_SIZE`, `_REGION`, `_IDLE_TIMEOUT` | `MicroVMConfig` | sandbox image and shape |
 | `DO_MICROVM_NAMESPACE` | `MicroVMConfig`, `GatewaySettings` | owner or deployment on a shared team |
 | `DO_MICROVM_MAX_CONCURRENT_CREATES` | `MicroVMConfig` | bound on creates in flight |
-| `DO_MICROVM_EGRESS`, `_EGRESS_CREDENTIALS` | `MicroVMConfig` | outbound policy (egress.py) |
+| `DO_MICROVM_EGRESS`, `_EGRESS_CREDENTIALS` | `MicroVMConfig` | outbound policy of sandboxes (egress.py) |
+| `DO_MICROVM_AGENT_EGRESS`, `_AGENT_EGRESS_CREDENTIALS` | `MicroVMConfig` | outbound policy of agent hosts |
 | `DO_MICROVM_AGENT_IMAGE`, `_AGENT_SIZE`, `_AGENT_PORT` | `MicroVMConfig` | agent hosts |
 | `DO_MICROVM_SUBAGENT_ENV_PASSTHROUGH`, `_WARM_START` | `MicroVMConfig`, local agent host | agent hosts |
 | `DO_MICROVM_HOST_MODE`, `DO_MICROVM_GATEWAY_TOKEN` | `GatewaySettings` | where hosts run, gateway token |
@@ -60,6 +61,8 @@ HOST_MODE_ENV = "DO_MICROVM_HOST_MODE"
 GATEWAY_TOKEN_ENV = "DO_MICROVM_GATEWAY_TOKEN"
 EGRESS_ENV = "DO_MICROVM_EGRESS"
 EGRESS_CREDENTIALS_ENV = "DO_MICROVM_EGRESS_CREDENTIALS"
+AGENT_EGRESS_ENV = "DO_MICROVM_AGENT_EGRESS"
+AGENT_EGRESS_CREDENTIALS_ENV = "DO_MICROVM_AGENT_EGRESS_CREDENTIALS"
 
 
 def env_value(name: str) -> str | None:
@@ -86,25 +89,27 @@ def _split_csv(raw: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in raw.split(",") if item.strip())
 
 
-def egress_from_env() -> EgressPolicy | None:
+def egress_from_env(egress_var: str = EGRESS_ENV, credentials_var: str = EGRESS_CREDENTIALS_ENV) -> EgressPolicy | None:
     """The outbound policy `DO_MICROVM_EGRESS` and `DO_MICROVM_EGRESS_CREDENTIALS` describe, or None.
+
+    The agent hosts' pair (`DO_MICROVM_AGENT_EGRESS`, `DO_MICROVM_AGENT_EGRESS_CREDENTIALS`) has the same form.
 
     `DO_MICROVM_EGRESS`: `none` denies every destination, `*` allows every one, anything else is a
     comma-separated list of allowed destinations. `DO_MICROVM_EGRESS_CREDENTIALS`: comma-separated
     `https-url=VARIABLE` items; each secret is read from the variable named after `=`, so no secret
     appears in this value. Credentials without `DO_MICROVM_EGRESS` allow every destination.
     """
-    policy = EgressPolicy.parse(os.environ.get(EGRESS_ENV, ""))
-    items = env_csv(EGRESS_CREDENTIALS_ENV)
+    policy = EgressPolicy.parse(os.environ.get(egress_var, ""))
+    items = env_csv(credentials_var)
     if items and policy is None:
         policy = EgressPolicy.allow_all()
     for item in items:
         url, sep, variable = item.rpartition("=")
         if not sep or not url or not variable:
-            raise ValueError(f"{EGRESS_CREDENTIALS_ENV} items are https-url=VARIABLE, got {item!r}")
+            raise ValueError(f"{credentials_var} items are https-url=VARIABLE, got {item!r}")
         secret = os.environ.get(variable.strip())
         if not secret:
-            raise ValueError(f"{EGRESS_CREDENTIALS_ENV} names {variable.strip()!r}, which is unset or empty")
+            raise ValueError(f"{credentials_var} names {variable.strip()!r}, which is unset or empty")
         assert policy is not None
         policy = policy.with_credential(url.strip(), secret=secret)
     return policy
@@ -159,6 +164,8 @@ class MicroVMConfig:
     # Start agent hosts from a checkpoint of an already-booted host (about 6 s
     # instead of ~14 s once the checkpoint exists). See MicroVMAgentHost.
     warm_start: bool = False
+    # Outbound policy of every agent host whose HostSpec sets none (egress.py); None sends no policy.
+    agent_egress: EgressPolicy | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "namespace", validate_namespace(self.namespace))
@@ -192,4 +199,5 @@ class MicroVMConfig:
             agent_size=MicroVMSize.parse(env_value("DO_MICROVM_AGENT_SIZE") or DEFAULT_AGENT_SIZE),
             subagent_env_passthrough=env_csv(PASSTHROUGH_ENV),
             warm_start=env_flag("DO_MICROVM_WARM_START"),
+            agent_egress=egress_from_env(AGENT_EGRESS_ENV, AGENT_EGRESS_CREDENTIALS_ENV),
         )

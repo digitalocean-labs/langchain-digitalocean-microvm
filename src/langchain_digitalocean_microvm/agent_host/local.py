@@ -390,6 +390,8 @@ class LocalDevServerHost:
         return f"agenthost-{host_id}"
 
     def _provision(self, host_id: str, spec: HostSpec) -> _HostRecord:
+        if spec.egress is not None:
+            logger.warning("Local agent host %s: an egress policy is not applied; the server uses this machine's network", host_id)
         cwd = self.root_dir / _safe_dirname(host_id)
         if cwd.exists():
             shutil.rmtree(cwd)  # a fresh host never inherits a dead predecessor's pickles

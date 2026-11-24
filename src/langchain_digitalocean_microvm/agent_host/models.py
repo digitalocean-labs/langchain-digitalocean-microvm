@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
+from langchain_digitalocean_microvm.egress import EgressPolicy
 from langchain_digitalocean_microvm.status import MicroVMStatus
 
 # Every agent host carries HOST_MANAGED_TAG (bulk scans, GC sweeps), one
@@ -96,6 +97,8 @@ class HostSpec:
     the host's environment on top of any config.subagent_env_passthrough
     variables; the host token and N_JOBS_PER_WORKER are always set last.
     `reuse`: one host per task, or one shared ("pooled") host per graph.
+    `egress` is the host's outbound policy (default: config.agent_egress), e.g.
+    a credential for the model endpoint, so the model key is not in `env`.
     """
 
     graph_id: str
@@ -104,6 +107,7 @@ class HostSpec:
     env: Mapping[str, str] = field(default_factory=dict)
     reuse: Literal["per-task", "pooled"] = "per-task"
     n_jobs_per_worker: int = 2
+    egress: EgressPolicy | None = None
 
 
 @dataclass(frozen=True, slots=True)

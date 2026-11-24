@@ -70,6 +70,7 @@ from langchain_digitalocean_microvm.agent_host.warm import (
 )
 from langchain_digitalocean_microvm.client import MicroVMClient, microvm_name
 from langchain_digitalocean_microvm.config import DEFAULT_ENDPOINT_WAIT, MicroVMConfig
+from langchain_digitalocean_microvm.egress import EgressPolicy
 from langchain_digitalocean_microvm.exceptions import (
     HostCapacityError,
     HostNotReadyError,
@@ -431,6 +432,7 @@ class MicroVMAgentHost:
                     self._warm.mark_token_pending(host_id)
                     return warm, True
         env = build_host_env(spec, token, passthrough=self.config.subagent_env_passthrough)
+        policy = self.egress_for(spec)
         kwargs: dict[str, Any] = {
             "name": name,
             "oci_ref": image,
@@ -441,6 +443,7 @@ class MicroVMAgentHost:
             "environment": env,
             "idle_timeout": self.config.idle_timeout,
             "tags": [HOST_MANAGED_TAG, host_id_tag(host_id), host_graph_tag(spec.graph_id), *namespace_tags(self.config.namespace)],
+            "egress_policy": policy.for_image(image) if policy is not None else None,
         }
         try:
             state = client.create(**kwargs)
@@ -457,6 +460,10 @@ class MicroVMAgentHost:
             state = client.create(**kwargs)
         self._tokens[host_id] = token
         return state, True
+
+    def egress_for(self, spec: HostSpec) -> EgressPolicy | None:
+        """The outbound policy a host for `spec` is created with: `spec.egress`, else `config.agent_egress`."""
+        return spec.egress or self.config.agent_egress
 
     def _golden_name(self, spec: HostSpec, image: str, size: MicroVMSize) -> str:
         return self._warm.golden_name(spec, image, size)

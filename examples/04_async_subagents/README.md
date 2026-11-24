@@ -38,7 +38,7 @@ you ── Studio ── supervisor (langgraph dev) ── embedded gateway ─�
 | Subagent | What it is | Needs |
 | --- | --- | --- |
 | `echo` | Model-free; answers `echo: <message>`. Prefix the message with `sleep N:` to keep it busy N seconds, and/or `save NAME:` to write the rest of the message to `/outputs/NAME` | nothing |
-| `researcher` | Deep agent with a shell and filesystem rooted in its own task directory inside the host (`/work/tasks/<task id>`, which it sees as `/`; results under `/outputs`) | `DO_MODEL_ACCESS_KEY` (passed into the host by `agent.py`) |
+| `researcher` | Deep agent with a shell and filesystem rooted in its own task directory inside the host (`/work/tasks/<task id>`, which it sees as `/`; results under `/outputs`) | `DO_MODEL_ACCESS_KEY` (on a MicroVM an outbound credential, see Real MicroVMs; locally passed into the host's environment by `agent.py`) |
 
 ## Setup
 
@@ -119,7 +119,7 @@ uv run examples/04_async_subagents/run_script.py
 ### Try the researcher
 
 *"Launch a researcher task: write a Python script under /outputs that prints
-the first 20 Fibonacci numbers, run it, and summarize the output."* The host
+the first 20 Fibonacci numbers, run it, and summarize the output."* A local host
 gets `DO_MODEL_ACCESS_KEY` from the supervisor's environment via
 `HostSpec(env=...)`; its files live under `$TMPDIR/microvm_sandbox_local/agenthost-<task id>/`
 in local mode. Then: *"Fetch that task's files and show me the script."* The
@@ -225,6 +225,11 @@ What is different from local mode:
   every 2 seconds, which keeps the host awake; when nothing is running it
   pauses the host itself after a minute, and the next task resumes it in
   under a second.
+- **The model key stays out of the host.** The researcher's host is created with an outbound
+  policy (`HostSpec(egress=...)`) that holds `DO_MODEL_ACCESS_KEY` as a credential for
+  `https://inference.do-ai.run/v1`: the platform adds the `Authorization` header to the host's
+  requests there, and the host's environment holds a placeholder. Every other destination stays
+  allowed. See [Outbound policy](../../docs/reference.md#outbound-policy-egress-rules-and-credentials).
 - **At the limit.** If a new host is needed while the team is at its MicroVM limit, the
   gateway deletes an idle host whose results are cached once it has been unused for a minute
   (`eviction_grace`); until then, or if every host is busy, launching fails with a clear

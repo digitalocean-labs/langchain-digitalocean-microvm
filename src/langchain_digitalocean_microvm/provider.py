@@ -75,6 +75,7 @@ from langchain_digitalocean_microvm.namespace import (
     namespaced_prefix,
 )
 from langchain_digitalocean_microvm.reconcile import (
+    checkpoint_restorable,
     connect_transport,
     settle_to_running,
 )
@@ -391,16 +392,7 @@ class MicroVMLifecycle:
         return None
 
     def _restorable(self, checkpoint: Checkpoint) -> bool:
-        """False for a checkpoint with credentials whose origin MicroVM is gone."""
-        if not checkpoint.has_credentials:
-            return True
-        if checkpoint.microvm_id is None:
-            return False
-        try:
-            origin = self._client_or_raise().get(checkpoint.microvm_id)
-        except MicroVMNotFoundError:
-            return False
-        return origin.status not in (MicroVMStatus.TERMINATING, MicroVMStatus.TERMINATED)
+        return checkpoint_restorable(self._client_or_raise(), checkpoint)
 
     def delete_template(self, template: SandboxTemplate) -> None:
         """Delete a template's checkpoint, and the MicroVM it was taken from if that was kept.
