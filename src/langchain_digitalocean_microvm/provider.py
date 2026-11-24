@@ -391,7 +391,7 @@ class MicroVMLifecycle:
         return None
 
     def _restorable(self, checkpoint: Checkpoint) -> bool:
-        """False for a checkpoint with credentials whose origin MicroVM is gone (the service still lists it)."""
+        """False for a checkpoint with credentials whose origin MicroVM is gone (its status does not say so)."""
         if not checkpoint.has_credentials:
             return True
         if checkpoint.microvm_id is None:

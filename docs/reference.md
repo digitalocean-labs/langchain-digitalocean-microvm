@@ -135,9 +135,9 @@ policy = EgressPolicy.allow("pypi.org").with_credential("https://api.example.com
   checkpoint whose credentials are gone cannot be restored; a template whose policy has credentials
   therefore keeps its temporary MicroVM, paused (`microvm-template-build-*`; it counts against the team
   limit). `delete_template` deletes both, and `scripts/delete_all.py` keeps both unless
-  `--include-templates`. The service still lists such a checkpoint as available after its MicroVM is
-  deleted, so `find_template` and `build_template` check that the MicroVM exists: `find_template`
-  returns `None` and `build_template` deletes the checkpoint and builds a new one. A clone of it fails
+  `--include-templates`. For a checkpoint with credentials, `find_template` and `build_template` check
+  that the MicroVM it came from exists; when it does not, `find_template` returns `None` and
+  `build_template` deletes the checkpoint and builds a new one. A clone of it fails
   with `CheckpointUnavailableError` (a `MicroVMNotFoundError`, so `TemplateCache` rebuilds the template).
 - **Inside the MicroVM**: outbound traffic goes through a platform proxy set in `HTTP_PROXY` and
   `HTTPS_PROXY`; only HTTP and HTTPS from clients that use those variables reach a destination (no SSH,
