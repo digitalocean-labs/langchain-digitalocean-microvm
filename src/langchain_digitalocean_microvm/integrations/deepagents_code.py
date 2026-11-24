@@ -12,7 +12,9 @@ use so the registry can read `metadata` without credentials):
   (`dcode-<hex>`); with an id it reuses, resumes or creates that sandbox.
   dcode reports a sandbox by `backend.id`, which is the MicroVM's id, and
   later deletes it by that id, so either id is accepted everywhere.
-- Extra keyword arguments: `seed_files` (uploaded on create only) and `tags`.
+- Extra keyword arguments: `seed_files` (uploaded on create only), `tags`, and
+  `egress`: an `EgressPolicy`, or a string in the `DO_MICROVM_EGRESS` form
+  (`none`, `*`, or comma-separated destinations), applied on create only.
   Anything else is refused rather than silently ignored.
 """
 
@@ -35,10 +37,11 @@ except ImportError as exc:  # pragma: no cover - exercised only without deepagen
 
 from langchain_digitalocean_microvm import exceptions as _mvx
 from langchain_digitalocean_microvm.backend import MicroVMSandbox
+from langchain_digitalocean_microvm.egress import EgressPolicy
 from langchain_digitalocean_microvm.provider import MicroVMLifecycle
 
 PROVIDER_NAME = "microvm"
-_KNOWN_KWARGS = frozenset({"seed_files", "tags"})
+_KNOWN_KWARGS = frozenset({"seed_files", "tags", "egress"})
 
 
 class MicroVMSandboxProvider(SandboxProvider):
@@ -72,10 +75,16 @@ class MicroVMSandboxProvider(SandboxProvider):
         unknown = sorted(set(kwargs) - _KNOWN_KWARGS)
         if unknown:
             raise ValueError(f"MicroVM sandbox provider does not support {unknown}; known: {sorted(_KNOWN_KWARGS)}")
+        egress = kwargs.get("egress")
+        if isinstance(egress, str):
+            egress = EgressPolicy.parse(egress)
+        elif egress is not None and not isinstance(egress, EgressPolicy):
+            raise ValueError(f"egress is an EgressPolicy or a string such as 'pypi.org,files.pythonhosted.org', got {egress!r}")
         resolved = self._resolve(sandbox_id) if sandbox_id else f"{self._id_prefix}-{secrets.token_hex(6)}"
         try:
             backend = self.lifecycle.get_or_create(
                 sandbox_id=resolved, seed_files=kwargs.get("seed_files"), tags=tuple(kwargs.get("tags") or ()),
+                egress=egress,
             )
         except _mvx.SandboxNotFoundError as exc:
             raise SandboxNotFoundError(str(exc)) from exc

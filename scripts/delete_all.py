@@ -10,7 +10,8 @@ what is no longer needed. This lists, and with --yes deletes:
 - checkpoints taken from those MicroVMs, and with --all-owners also those whose source MicroVM name starts
   with one of this package's prefixes in the namespace (a checkpoint outlives its MicroVM and then
   records no owner), incl. warm-start golden checkpoints. Sandbox templates
-  (`microvm-template-*`) are kept unless --include-templates;
+  (`microvm-template-*`) are kept unless --include-templates, together with the paused MicroVM a
+  template built with outbound credentials was taken from;
 - host and subagent/thread sandbox rows in the namespace's gateway store
   (`gateway[-<namespace>].sqlite` in the package's state directory, see docs/reference.md), marked destroyed so the next run
   does not try to reuse a deleted host.
@@ -64,6 +65,7 @@ TAGS = (MANAGED_TAG, "microvm-probe")
 NAME_PREFIXES_BARE = ("microvm-sandbox", "microvm-agenthost", "microvm-golden", "microvm-template", "probe")
 NAME_PREFIXES = tuple(f"{p}-" for p in NAME_PREFIXES_BARE)
 TEMPLATE_PREFIX = "microvm-template-"
+TEMPLATE_BUILD_PREFIX = "microvm-template-build-"
 GONE = (MicroVMStatus.TERMINATING, MicroVMStatus.TERMINATED)
 CONFIRM_WORD = "delete"
 
@@ -92,7 +94,10 @@ def find(
         and (cp.microvm_id in ours or (everyone and _name_in_scope(cp, namespace, all_namespaces)))
     ]
     kept = [] if include_templates else [cp for cp in checkpoints if cp.name.startswith(TEMPLATE_PREFIX)]
-    return list(microvms.values()), [cp for cp in checkpoints if cp not in kept], kept
+    # A template built with outbound credentials keeps the MicroVM it came from: without it, it cannot be restored.
+    origins = {cp.microvm_id for cp in kept}
+    selected = [s for s in microvms.values() if not (s.id in origins and s.name.startswith(TEMPLATE_BUILD_PREFIX))]
+    return selected, [cp for cp in checkpoints if cp not in kept], kept
 
 
 def _name_in_scope(cp: Checkpoint, namespace: str | None, all_namespaces: bool) -> bool:

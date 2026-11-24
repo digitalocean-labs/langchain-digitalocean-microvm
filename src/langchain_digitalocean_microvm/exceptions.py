@@ -23,6 +23,15 @@ class MicroVMNotFoundError(MicroVMClientError):
     """No MicroVM or checkpoint found for the given id (server returned 404)."""
 
 
+class CheckpointUnavailableError(MicroVMNotFoundError):
+    """A listed checkpoint that can no longer be restored.
+
+    The service deletes a MicroVM's stored outbound credentials with the MicroVM, and a checkpoint
+    taken from it cannot be restored afterwards. A `MicroVMNotFoundError`, so `TemplateCache`
+    rebuilds the template.
+    """
+
+
 class MicroVMAlreadyExistsError(MicroVMClientError):
     """Create collided with an existing resource (server returned 409)."""
 

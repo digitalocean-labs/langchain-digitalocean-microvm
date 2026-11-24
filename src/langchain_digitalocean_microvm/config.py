@@ -12,6 +12,7 @@ This module is the one place that reads `DO_MICROVM_*` environment variables (a 
 | `DO_MICROVM_IMAGE`, `_HTTP_PORT`, `_SIZE`, `_REGION`, `_IDLE_TIMEOUT` | `MicroVMConfig` | sandbox image and shape |
 | `DO_MICROVM_NAMESPACE` | `MicroVMConfig`, `GatewaySettings` | owner or deployment on a shared team |
 | `DO_MICROVM_MAX_CONCURRENT_CREATES` | `MicroVMConfig` | bound on creates in flight |
+| `DO_MICROVM_EGRESS`, `_EGRESS_CREDENTIALS` | `MicroVMConfig` | outbound policy (egress.py) |
 | `DO_MICROVM_AGENT_IMAGE`, `_AGENT_SIZE`, `_AGENT_PORT` | `MicroVMConfig` | agent hosts |
 | `DO_MICROVM_SUBAGENT_ENV_PASSTHROUGH`, `_WARM_START` | `MicroVMConfig`, local agent host | agent hosts |
 | `DO_MICROVM_HOST_MODE`, `DO_MICROVM_GATEWAY_TOKEN` | `GatewaySettings` | where hosts run, gateway token |
@@ -23,6 +24,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Literal
 
+from langchain_digitalocean_microvm.egress import EgressPolicy
 from langchain_digitalocean_microvm.models import MicroVMSize
 from langchain_digitalocean_microvm.namespace import validate_namespace
 
@@ -56,6 +58,8 @@ PASSTHROUGH_ENV = "DO_MICROVM_SUBAGENT_ENV_PASSTHROUGH"
 TEMPLATE_DIR_ENV = "DO_MICROVM_SUBAGENT_TEMPLATE"
 HOST_MODE_ENV = "DO_MICROVM_HOST_MODE"
 GATEWAY_TOKEN_ENV = "DO_MICROVM_GATEWAY_TOKEN"
+EGRESS_ENV = "DO_MICROVM_EGRESS"
+EGRESS_CREDENTIALS_ENV = "DO_MICROVM_EGRESS_CREDENTIALS"
 
 
 def env_value(name: str) -> str | None:
@@ -80,6 +84,30 @@ def env_csv(name: str) -> tuple[str, ...]:
 
 def _split_csv(raw: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in raw.split(",") if item.strip())
+
+
+def egress_from_env() -> EgressPolicy | None:
+    """The outbound policy `DO_MICROVM_EGRESS` and `DO_MICROVM_EGRESS_CREDENTIALS` describe, or None.
+
+    `DO_MICROVM_EGRESS`: `none` denies every destination, `*` allows every one, anything else is a
+    comma-separated list of allowed destinations. `DO_MICROVM_EGRESS_CREDENTIALS`: comma-separated
+    `https-url=VARIABLE` items; each secret is read from the variable named after `=`, so no secret
+    appears in this value. Credentials without `DO_MICROVM_EGRESS` allow every destination.
+    """
+    policy = EgressPolicy.parse(os.environ.get(EGRESS_ENV, ""))
+    items = env_csv(EGRESS_CREDENTIALS_ENV)
+    if items and policy is None:
+        policy = EgressPolicy.allow_all()
+    for item in items:
+        url, sep, variable = item.rpartition("=")
+        if not sep or not url or not variable:
+            raise ValueError(f"{EGRESS_CREDENTIALS_ENV} items are https-url=VARIABLE, got {item!r}")
+        secret = os.environ.get(variable.strip())
+        if not secret:
+            raise ValueError(f"{EGRESS_CREDENTIALS_ENV} names {variable.strip()!r}, which is unset or empty")
+        assert policy is not None
+        policy = policy.with_credential(url.strip(), secret=secret)
+    return policy
 
 
 @dataclass(frozen=True)
@@ -116,6 +144,9 @@ class MicroVMConfig:
     # At most this many sandboxes are created or resumed at once by one MicroVMLifecycle (all callers
     # share it: threads, subagents, per-task sandboxes); None: no limit. Per process, not across processes.
     max_concurrent_creates: int | None = None
+    # Outbound policy of the sandboxes and templates this config creates from the image (egress.py);
+    # None sends no policy. A sandbox created from a template has the template's policy.
+    egress: EgressPolicy | None = None
 
     # --- agent hosts -------------------------------------------------
     agent_port: int = DEFAULT_AGENT_PORT
@@ -153,6 +184,7 @@ class MicroVMConfig:
             region=env_value("DO_MICROVM_REGION") or DEFAULT_REGION,
             namespace=env_value(NAMESPACE_ENV),
             max_concurrent_creates=env_int("DO_MICROVM_MAX_CONCURRENT_CREATES", 0) or None,
+            egress=egress_from_env(),
             http_port=env_int("DO_MICROVM_HTTP_PORT", DEFAULT_HTTP_PORT),
             idle_timeout=env_value("DO_MICROVM_IDLE_TIMEOUT") or DEFAULT_IDLE_TIMEOUT,
             agent_port=env_int("DO_MICROVM_AGENT_PORT", DEFAULT_AGENT_PORT),

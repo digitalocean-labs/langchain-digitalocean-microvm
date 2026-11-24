@@ -133,3 +133,26 @@ def test_find_template_in_local_mode() -> None:
 
     lifecycle.delete_template(found)
     assert lifecycle.find_template("analyst", seed_files=[("/x", b"x")]) is None
+
+
+def test_a_failed_checkpoint_is_tried_once_more_and_then_reported_with_its_reason(monkeypatch) -> None:
+    from dataclasses import replace
+
+    client = FakeMicroVMClient()
+    real = client.create_checkpoint
+    failures = [2]
+
+    def flaky(microvm_id, *, name=None):
+        checkpoint = real(microvm_id, name=name)
+        if failures[0]:
+            failures[0] -= 1
+            checkpoint = replace(checkpoint, status="CHECKPOINT_FAILED", raw={"failure_reason": "capture error"})
+            client._checkpoints[checkpoint.id] = checkpoint
+        return checkpoint
+
+    monkeypatch.setattr(client, "create_checkpoint", flaky)
+    with pytest.raises(SandboxError, match=r"CHECKPOINT_FAILED \(capture error\)"):
+        _real(client).build_template("flaky")
+    failures[0] = 1
+    assert _real(client).build_template("flaky").built
+    assert [c.status for c in client.list_checkpoints()] == ["CHECKPOINT_AVAILABLE"]

@@ -88,6 +88,20 @@ def test_create_reuse_by_either_id_and_delete() -> None:
         provider.delete(sandbox_id="my-box")
 
 
+def test_egress_is_a_policy_or_a_destination_list() -> None:
+    from langchain_digitalocean_microvm import EgressPolicy
+
+    client = FakeMicroVMClient()
+    provider = _provider(client)
+    provider.get_or_create(sandbox_id="a", egress="pypi.org,files.pythonhosted.org")
+    provider.get_or_create(sandbox_id="b", egress=EgressPolicy.deny_all())
+    assert [c["egress_policy"] for c in client.created] == [
+        EgressPolicy.allow("pypi.org", "files.pythonhosted.org"), EgressPolicy.deny_all()
+    ]
+    with pytest.raises(ValueError, match="EgressPolicy or a string"):
+        provider.get_or_create(sandbox_id="c", egress=["pypi.org"])
+
+
 def test_unknown_options_are_refused() -> None:
     provider = _provider(FakeMicroVMClient())
     with pytest.raises(ValueError, match="snapshot"):

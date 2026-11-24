@@ -36,7 +36,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from langchain_digitalocean_microvm.client import MANAGED_TAG
+from langchain_digitalocean_microvm.egress import EgressPolicy
 from langchain_digitalocean_microvm.exceptions import (
+    CheckpointUnavailableError,
     MicroVMAlreadyExistsError,
     MicroVMAPIError,
     MicroVMClientError,
@@ -92,6 +94,7 @@ class FakeMicroVMClient:
         self._countdown: dict[str, int] = {}
         self._target: dict[str, MicroVMStatus] = {}
         self._checkpoints: dict[str, Checkpoint] = {}
+        self._egress: dict[str, dict[str, Any]] = {}  # microvm id -> its egress_policy as the API returns it
         self._next_id = 1
 
         self.created: list[dict[str, Any]] = []  # every create() payload, in order
@@ -157,7 +160,10 @@ class FakeMicroVMClient:
                region: str | None = None, size: MicroVMSize | None = None, http_port: int | None = None,
                http_protocol: str | None = None, environment: dict[str, str] | None = None,
                tags: list[str] | None = None, idle_timeout: str | None = None, auto_resume: bool | None = None,
-               networking: str | None = None, vpc_uuid: str | None = None) -> MicroVMState:
+               networking: str | None = None, vpc_uuid: str | None = None,
+               egress_policy: EgressPolicy | None = None) -> MicroVMState:
+        if checkpoint_id is not None and egress_policy is not None:
+            raise ValueError("a MicroVM created from a checkpoint inherits its egress policy; do not pass one")
         payload = {k: v for k, v in locals().items() if k != "self"}
         with self._lock:
             self._creates_in_flight += 1
@@ -189,6 +195,11 @@ class FakeMicroVMClient:
             checkpoint = self._checkpoints.get(checkpoint_id)
             if checkpoint is None or not checkpoint.available:
                 raise MicroVMAPIError(400, "checkpoint not available")
+            origin = self._microvms.get(checkpoint.microvm_id or "")
+            if checkpoint.has_credentials and (origin is None or origin.status in _GONE):
+                raise CheckpointUnavailableError(
+                    "the origin MicroVM's egress credentials are incomplete; this checkpoint cannot be restored"
+                )
             region, size = checkpoint.region, checkpoint.size
         if self.fail_next_create:
             self.fail_next_create = False
@@ -197,6 +208,14 @@ class FakeMicroVMClient:
         if any(s.name == name for s in self.live()):
             raise MicroVMAlreadyExistsError(f"a MicroVM named {name!r} already exists in this region")
         state = self._register(name=name, size=size, region=region, tags=body_tags, http_port=http_port)
+        policy: EgressPolicy | None = payload["egress_policy"]
+        if policy is not None:
+            api = policy.to_api()
+            for credential in api.get("credentials", []):
+                del credential["secret"]  # the API never returns a secret
+            self._egress[state.id] = api
+        elif checkpoint_id is not None and checkpoint_id in self._checkpoints:
+            self._egress[state.id] = dict(self._checkpoints[checkpoint_id].raw.get("egress_policy") or {})
         if checkpoint_id is not None:  # clones come back already running
             state = self._settle(state.id, MicroVMStatus.RUNNING)
         return state
@@ -314,8 +333,10 @@ class FakeMicroVMClient:
 
     def create_checkpoint(self, microvm_id: str, *, name: str | None = None) -> Checkpoint:
         state = self._require(microvm_id)
+        raw = {"egress_policy": self._egress[microvm_id]} if microvm_id in self._egress else {}
         checkpoint = Checkpoint(id=f"cp-{len(self._checkpoints) + 1}", name=name or "checkpoint", microvm_id=microvm_id,
-                                region=state.region, size=state.size, status="CHECKPOINT_AVAILABLE", created_at=None)
+                                region=state.region, size=state.size, status="CHECKPOINT_AVAILABLE", created_at=None,
+                                raw=raw)
         self._checkpoints[checkpoint.id] = checkpoint
         return checkpoint
 
