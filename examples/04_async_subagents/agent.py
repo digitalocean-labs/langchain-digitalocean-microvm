@@ -35,8 +35,10 @@ Two subagent types, both served from images/agent-host/:
               and/or "save NAME:" to write the rest to /outputs/NAME.
 - researcher  a deep agent whose filesystem IS the VM: its own task directory
               (/work/tasks/<task id>, seen as "/"), keeping results under
-              /outputs/. Needs DO_MODEL_ACCESS_KEY inside the host; passed via
-              HostSpec(env=...).
+              /outputs/. Needs DO_MODEL_ACCESS_KEY. On a MicroVM the key is an
+              outbound credential (HostSpec(egress=...)): the platform adds it to
+              the host's requests to the inference endpoint, and the host's
+              environment holds a placeholder. Locally it is in HostSpec(env=...).
 
 RUN (from the repository root; needs the agent-host extra: uv sync --all-extras)
     cd examples/04_async_subagents && uv run langgraph dev
@@ -48,11 +50,14 @@ import os
 
 from deepagents import create_deep_agent
 
+from langchain_digitalocean_microvm import EgressPolicy
 from langchain_digitalocean_microvm.agent_host import (
     GatewaySettings,
     HostSpec,
     LazyGateway,
 )
+
+INFERENCE_URL = "https://inference.do-ai.run/v1"
 
 
 def make_model():
@@ -73,29 +78,41 @@ def make_model():
 model = make_model()
 
 
-def _researcher_env() -> dict[str, str]:
-    """Only the inference key crosses into a host (docs §4.8).
-
-    The example reuses the supervisor's key so it works out of the box; anything
-    closer to production should hand hosts a dedicated, rate-limited Model Access
-    Key -- generated code inside the VM can read it.
-    """
-    key = os.environ.get("DO_MODEL_ACCESS_KEY")
-    return {"DO_MODEL_ACCESS_KEY": key} if key else {}
-
-
 settings = GatewaySettings.from_env()  # DO_MICROVM_HOST_MODE etc.
 # Real MicroVMs: one shared host per subagent type keeps the example at two
 # MicroVMs (echo + researcher). n_jobs_per_worker is how
 # many of that type's tasks can run at once on the shared host.
 pooled = settings.host_mode == "microvm"
 
+
+def _researcher_spec() -> HostSpec:
+    """The researcher's host, with the inference key (docs §4.8).
+
+    On a MicroVM the key is an outbound credential: the platform sets the
+    Authorization header of the host's requests to the inference endpoint, so the
+    key is not in the host, and its environment holds a placeholder for the model
+    client. Every other destination stays allowed. A local host gets the key
+    in its environment. The example reuses the supervisor's key so it works out of
+    the box; anything closer to production should use a dedicated, rate-limited
+    Model Access Key.
+    """
+    key = os.environ.get("DO_MODEL_ACCESS_KEY")
+    reuse = "pooled" if pooled else "per-task"
+    if not key:
+        return HostSpec(graph_id="researcher", reuse=reuse)
+    if pooled:
+        return HostSpec(
+            graph_id="researcher",
+            env={"DO_MODEL_ACCESS_KEY": "set-by-the-platform"},
+            egress=EgressPolicy.allow_all().with_credential(INFERENCE_URL, secret=key),
+            reuse=reuse,
+        )
+    return HostSpec(graph_id="researcher", env={"DO_MODEL_ACCESS_KEY": key}, reuse=reuse)
+
 gateway = LazyGateway(
     {
         "echo": HostSpec(graph_id="echo", reuse="pooled" if pooled else "per-task", n_jobs_per_worker=4 if pooled else 2),
-        "researcher": HostSpec(
-            graph_id="researcher", env=_researcher_env(), reuse="pooled" if pooled else "per-task"
-        ),
+        "researcher": _researcher_spec(),
     },
     settings=settings,
     # The gateway's own poll loop is what notices a finished run and caches it;

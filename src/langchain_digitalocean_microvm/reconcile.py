@@ -15,13 +15,18 @@ from collections.abc import Callable
 
 from langchain_digitalocean_microvm.client import MicroVMClient
 from langchain_digitalocean_microvm.config import MicroVMConfig
-from langchain_digitalocean_microvm.exceptions import MicroVMClientError, SandboxError
-from langchain_digitalocean_microvm.models import MicroVMState
+from langchain_digitalocean_microvm.exceptions import (
+    MicroVMClientError,
+    MicroVMNotFoundError,
+    SandboxError,
+)
+from langchain_digitalocean_microvm.models import Checkpoint, MicroVMState
 from langchain_digitalocean_microvm.status import (
     RESUMABLE_STATUSES,
     REUSABLE_STATUSES,
     TERMINAL_FAILURE_STATUSES,
     TRANSITIONAL_STATUSES,
+    MicroVMStatus,
 )
 from langchain_digitalocean_microvm.transport.base import (
     SandboxTransport,
@@ -39,6 +44,23 @@ MAX_SETTLE_ITERATIONS = 6
 # THIS caller created it (see MicroVMLifecycle._create_real for the
 # create-race semantics behind the bool).
 Recreate = Callable[[], tuple[MicroVMState, bool]]
+
+
+def checkpoint_restorable(client: MicroVMClient, checkpoint: Checkpoint) -> bool:
+    """False for a checkpoint with outbound credentials whose origin MicroVM is gone.
+
+    The service deletes a MicroVM's stored credentials with the MicroVM, and its checkpoints
+    cannot be restored afterwards.
+    """
+    if not checkpoint.has_credentials:
+        return True
+    if checkpoint.microvm_id is None:
+        return False
+    try:
+        origin = client.get(checkpoint.microvm_id)
+    except MicroVMNotFoundError:
+        return False
+    return origin.status not in (MicroVMStatus.TERMINATING, MicroVMStatus.TERMINATED)
 
 
 def settle_to_running(

@@ -3,9 +3,13 @@
 Warm start (config.warm_start, DO_MICROVM_WARM_START=1): new hosts are
 created from a checkpoint of an already-booted host instead of from the image
 (about 6 s instead of ~14 s). One "golden" checkpoint per distinct host
-configuration (image, graph, environment, size; named by a hash of them) is
-built on first use -- boot a MicroVM, wait for GET /ok, checkpoint it, delete
-the VM (checkpoints do not count against the team's MicroVM limit). A clone
+configuration (image, graph, environment, size, outbound policy; named by a
+hash of them) is built on first use -- boot a MicroVM, wait for GET /ok,
+checkpoint it, delete the VM (checkpoints do not count against the team's
+MicroVM limit). When the host's outbound policy has credentials the VM is
+kept, paused: the service deletes stored credentials with the MicroVM, and
+its checkpoints cannot be restored afterwards. A golden checkpoint whose VM
+is gone is deleted and built again. A clone
 inherits the golden VM's environment, token included, so right after
 creating one the manager writes the clone's own token to the token file
 (`token_file`, via exec, once the clone's Agent Server answers GET /ok); the
@@ -37,10 +41,12 @@ from langchain_digitalocean_microvm.exceptions import (
     HostNotReadyError,
     MicroVMClientError,
     MicroVMForbiddenError,
+    MicroVMNotFoundError,
     SandboxError,
 )
 from langchain_digitalocean_microvm.models import Checkpoint, MicroVMSize, MicroVMState
 from langchain_digitalocean_microvm.namespace import namespace_tags, namespaced_prefix
+from langchain_digitalocean_microvm.reconcile import checkpoint_restorable
 
 if TYPE_CHECKING:
     from langchain_digitalocean_microvm.agent_host.host import MicroVMAgentHost
@@ -70,8 +76,10 @@ class WarmStart:
         config = self._host.config
         env = build_host_env(spec, "", passthrough=config.subagent_env_passthrough)
         env_digest = {k: hashlib.sha256(v.encode()).hexdigest() for k, v in sorted(env.items())}  # no secrets in the hash input log
+        policy = self._host.egress_for(spec)
         material = json.dumps(
-            {"image": image, "graph": spec.graph_id, "env": env_digest, "size": size.slug, "port": config.agent_port},
+            {"image": image, "graph": spec.graph_id, "env": env_digest, "size": size.slug, "port": config.agent_port,
+             "egress": policy.digest((config.api_token or "").encode()) if policy is not None else None},
             sort_keys=True,
         )
         return f"{namespaced_prefix(GOLDEN_PREFIX, config.namespace)}-{hashlib.sha256(material.encode()).hexdigest()[:12]}"
@@ -88,8 +96,11 @@ class WarmStart:
             except MicroVMClientError:
                 logger.warning("Could not list checkpoints; starting %s cold", name, exc_info=True)
                 return None
-            if existing:
-                return existing[0]
+            for checkpoint in existing:
+                if checkpoint_restorable(client, checkpoint):
+                    return checkpoint
+                logger.warning("Warm-start checkpoint %s: its MicroVM is gone with its credentials; rebuilding", name)
+                self._delete_golden(checkpoint)
             try:
                 return self._build_golden(name, spec, image, size)
             except (SandboxError, MicroVMClientError, TimeoutError) as exc:
@@ -102,12 +113,15 @@ class WarmStart:
         client = host._client_or_raise()
         token = host._token_factory()
         env = build_host_env(spec, token, passthrough=config.subagent_env_passthrough)
+        policy = host.egress_for(spec)
+        keep_origin = False
         started = host._monotonic()
         try:
             state = client.create(
                 name=name, oci_ref=image, region=config.region, size=size, http_port=config.agent_port,
                 http_protocol="http", environment=env, idle_timeout=config.idle_timeout,
                 tags=[GOLDEN_TAG, *namespace_tags(config.namespace)],
+                egress_policy=policy.for_image(image) if policy is not None else None,
             )
         except MicroVMForbiddenError as exc:
             raise host._explain_forbidden(exc) from exc
@@ -121,9 +135,37 @@ class WarmStart:
             checkpoint = client.create_checkpoint(state.id, name=name)
             checkpoint = client.wait_for_checkpoint(checkpoint.id, timeout=config.ready_timeout)
             logger.info("Built warm-start checkpoint %s in %.0fs", name, host._monotonic() - started)
-            return checkpoint if checkpoint.available else None
+            if not checkpoint.available:
+                return None
+            # Deleting the VM would delete its stored credentials, and the checkpoint could no longer be restored.
+            keep_origin = bool(policy is not None and policy.credentials)
+            if keep_origin:
+                try:
+                    client.pause(state.id, timeout=config.ready_timeout)
+                except MicroVMClientError:
+                    logger.warning("Could not pause the MicroVM of warm-start checkpoint %s", name, exc_info=True)
+            return checkpoint
         finally:
-            host._delete_quietly(state.id)  # frees the slot; the checkpoint outlives it
+            if not keep_origin:
+                host._delete_quietly(state.id)  # frees the slot; the checkpoint outlives it
+
+    def _delete_golden(self, checkpoint: Checkpoint) -> None:
+        """Delete a golden checkpoint and the MicroVM it was taken from, if that still exists."""
+        client = self._host._client_or_raise()
+        try:
+            client.delete_checkpoint(checkpoint.id)
+        except MicroVMClientError:
+            logger.warning("Could not delete warm-start checkpoint %s", checkpoint.name, exc_info=True)
+        if checkpoint.microvm_id is None:
+            return
+        try:
+            origin = client.get(checkpoint.microvm_id)
+            if origin.name.startswith(GOLDEN_PREFIX):
+                client.delete(origin.id)
+        except MicroVMNotFoundError:
+            pass
+        except MicroVMClientError:
+            logger.warning("Could not delete the MicroVM of warm-start checkpoint %s", checkpoint.name, exc_info=True)
 
     def create_from_checkpoint(self, name: str, checkpoint: Checkpoint, host_id: str, spec: HostSpec) -> MicroVMState | None:
         """Create host `host_id` as a clone of `checkpoint`; None (after logging) to go cold."""

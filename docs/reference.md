@@ -205,12 +205,16 @@ Agent Protocol. Design and decisions: [`design.md`](design.md).
 The host manager:
 
 ```python
-from langchain_digitalocean_microvm import MicroVMAgentHost, HostSpec
+from langchain_digitalocean_microvm import EgressPolicy, HostSpec, MicroVMAgentHost
 
 hosts = MicroVMAgentHost()  # reads DO_MICROVM_* incl. DO_MICROVM_AGENT_IMAGE
 handle = hosts.get_or_create(
     host_id="task-123",
-    spec=HostSpec(graph_id="researcher", env={"DO_MODEL_ACCESS_KEY": "<scoped key>"}),
+    spec=HostSpec(
+        graph_id="researcher",
+        env={"DO_MODEL_ACCESS_KEY": "set-by-the-platform"},  # the model client needs a value
+        egress=EgressPolicy.allow_all().with_credential("https://inference.do-ai.run/v1", secret=key),
+    ),
 )
 handle.url, handle.token   # https://<id>.mkc1.microvm.ondigitalocean.com and the host's x-api-key
 hosts.edge_headers()       # {"Authorization": "Bearer <DO_MICROVM_ACCESS_TOKEN>"} for DigitalOcean's edge
@@ -226,6 +230,15 @@ hosts.delete(host_id="task-123")
   are immutable, so a host whose token this process does not know cannot be
   re-keyed: pass a stored token back with `remember_token()`, otherwise
   `get_or_create` replaces the host and `resume` refuses.
+- `HostSpec.egress` is the host's outbound policy (default: `MicroVMConfig.agent_egress`, from
+  `DO_MICROVM_AGENT_EGRESS` and `DO_MICROVM_AGENT_EGRESS_CREDENTIALS`, same forms as the sandbox pair;
+  see [Outbound policy](#outbound-policy-egress-rules-and-credentials)). With a credential for the
+  inference endpoint the model key is not in the host: the platform sets the `Authorization` header of
+  the host's requests to that URL prefix. Under an
+  allowlist, allow every other host the graph calls (for tracing, `api.smith.langchain.com`); the
+  gateway's completion webhook is reached only when `webhook_base_url` is set. Warm start keeps the
+  golden host of a policy with credentials, paused (see design.md §4.9). A local host applies no
+  policy and logs a warning.
 - `resume` never recreates a `failed` host: its in-VM state is the point.
 - `MicroVMLifecycle.pause(sandbox_id=...)` exists alongside
   `pause(backend)`, so callers can checkpoint a MicroVM they never connected to.

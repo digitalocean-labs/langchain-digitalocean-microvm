@@ -106,7 +106,7 @@ images/agent-host/  agent-host image: agent.py (echo, researcher), auth.py, lang
 
 Agent hosts follow the pattern's recommended shape: the communication layer, which some providers ship in their SDK and others leave to you, is the gateway (§4.1), and each task gets its own sandbox with a TTL, as in LangChain's thread-scoped default (§4.5).
 
-They diverge from LangChain's guidance in one place: the host holds secrets (the host token and a model key, §4.8) because the workload makes its own outbound requests and so holds the credentials it needs. Prefer subagent sandboxes (§5) when the subagent does not need to run inside its environment.
+They diverge from LangChain's guidance in one place: the host holds a secret (the host token, §4.8) and makes its own outbound requests. A model key can stay out of the host as an outbound credential that the platform adds to the host's requests (`HostSpec.egress`); otherwise the host holds it too. Prefer subagent sandboxes (§5) when the subagent does not need to run inside its environment.
 
 ### 4.1 Architecture
 
@@ -265,12 +265,12 @@ supervisor ── x-api-key: gateway token ──► gateway ── Authorizatio
 
 - **Two DigitalOcean tokens.** Endpoint traffic carries an access-only token, which can reach MicroVM endpoints but not manage MicroVMs; the control token never leaves the supervisor. An access token reaches every MicroVM of the team, so the per-host `x-api-key` stays mandatory.
 - **Per-host tokens**: 32 random bytes per host, in the MicroVM's environment (or token file) and the gateway's store only (store file mode 0600). The gateway never forwards supervisor headers.
-- **Inside the VM**: only the host token and a subagent-scoped model key. Generated code can read both; use a dedicated, rate-limited DO model access key.
+- **Inside the VM**: the host token, and the model key unless it is an outbound credential. With `HostSpec(egress=EgressPolicy....with_credential("https://inference.do-ai.run/v1", secret=key))` the platform sets the `Authorization` header of the host's requests to the inference endpoint and the key is not in the VM; the environment holds a placeholder for the model client. A key in the environment can be read by generated code; use a dedicated, rate-limited DO model access key either way.
 - **Meta routes** are unauthenticated (constraint 4): `/metrics` shows queue sizes to anyone with an access token.
 
 ### 4.9 Warm start (`DO_MICROVM_WARM_START=1`)
 
-One golden checkpoint per host configuration (image, graph, environment, size; hashed name `microvm-golden-…`), built on first use: boot a host, probe `/ok`, checkpoint, delete it. New hosts are clones. Because clones inherit the golden environment (token included) and the API rejects an `environment` on clone, the host manager writes each clone's own token to `/work/.microvm-agent/token` via exec, which `auth.py` prefers. It does so once the clone answers `/ok` (which needs no token): an exec sent to a fresh clone before its workload answers slows the clone's start. Any failure falls back to a cold create. A serving host is up in a clone's time instead of a cold boot plus the Agent Server's start; the first host pays for building the checkpoint once.
+One golden checkpoint per host configuration (image, graph, environment, size, outbound policy; hashed name `microvm-golden-…`), built on first use: boot a host, probe `/ok`, checkpoint, delete it. With outbound credentials the golden host is kept, paused, since its checkpoint cannot be restored once it is deleted with its credentials; the sweeper deletes it with its checkpoint, and a golden checkpoint whose host is gone is built again. New hosts are clones. Because clones inherit the golden environment (token included) and the API rejects an `environment` on clone, the host manager writes each clone's own token to `/work/.microvm-agent/token` via exec, which `auth.py` prefers. It does so once the clone answers `/ok` (which needs no token): an exec sent to a fresh clone before its workload answers slows the clone's start. Any failure falls back to a cold create. A serving host is up in a clone's time instead of a cold boot plus the Agent Server's start; the first host pays for building the checkpoint once.
 
 ---
 

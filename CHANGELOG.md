@@ -4,6 +4,9 @@
 
 **Added**
 
+- `HostSpec.egress` and `MicroVMConfig.agent_egress` (`DO_MICROVM_AGENT_EGRESS`, `DO_MICROVM_AGENT_EGRESS_CREDENTIALS`): the outbound policy of agent hosts. A credential for the inference endpoint keeps the model key out of a host. Warm start includes the policy in the golden checkpoint's name and keeps the golden host of a policy with credentials, paused; the sweeper deletes it with its checkpoint.
+- Example 04's researcher host on a MicroVM gets the model key as an outbound credential.
+
 - `EgressPolicy`: the outbound policy of a MicroVM (allowed destinations and credentials the platform adds to HTTPS requests). Set it with `MicroVMConfig.egress` (`DO_MICROVM_EGRESS`, `DO_MICROVM_EGRESS_CREDENTIALS`), `get_or_create(..., egress=...)`, `build_template(..., egress=...)`, the deepagents-code provider's `egress` option, or `MicroVMClient.create(..., egress_policy=...)`. A template whose policy has credentials keeps its temporary MicroVM, paused; `delete_template` and `scripts/delete_all.py` handle it, and `find_template`/`build_template` do not reuse such a template once that MicroVM is gone.
 - `CheckpointUnavailableError` (a `MicroVMNotFoundError`): a create from a checkpoint that can no longer be restored.
 - For an image in DigitalOcean Container Registry, a deny-default policy also allows `api.digitalocean.com`.

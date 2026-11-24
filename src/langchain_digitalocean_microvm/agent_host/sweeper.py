@@ -167,8 +167,25 @@ def plan_sweep(
         item = SweepItem("host", state.id, state.name, reason, host_id=host_id, idle_before=now - host_ttl)
         (delete if verdict else kept).append(item)
 
+    # Golden checkpoints first: a golden MicroVM kept for a checkpoint with credentials lives as long as it.
+    golden: list[tuple[Checkpoint, str | None]] = []
+    for checkpoint in client.list_checkpoints():
+        if not checkpoint.name.startswith(f"{GOLDEN_PREFIX}-") or checkpoint.status in _GONE_CHECKPOINT:
+            continue
+        if not in_scope(namespace_from_name(checkpoint.name, (GOLDEN_PREFIX,)), namespace, all_namespaces=all_namespaces):
+            continue
+        golden.append((checkpoint, _checkpoint_reason(checkpoint, now=now, ttl=checkpoint_ttl, build_timeout=golden_build_timeout)))
+    origins = {cp.microvm_id: (cp, reason) for cp, reason in golden if cp.has_credentials and cp.microvm_id}
+
     for state in _scoped(client.list(tag=GOLDEN_TAG), namespace, all_namespaces):
         if state.status in _GONE:
+            continue
+        if state.id in origins:
+            cp, cp_reason = origins[state.id]
+            if cp_reason:
+                delete.append(SweepItem("golden_vm", state.id, state.name, f"its warm-start checkpoint is deleted ({cp_reason})"))
+            else:
+                kept.append(SweepItem("golden_vm", state.id, state.name, f"keeps warm-start checkpoint {cp.name} restorable"))
             continue
         age = _age(now, state)
         if age is not None and age >= golden_build_timeout:
@@ -192,12 +209,7 @@ def plan_sweep(
         (delete if verdict else kept).append(item)
 
     checkpoints: list[SweepItem] = []
-    for checkpoint in client.list_checkpoints():
-        if not checkpoint.name.startswith(f"{GOLDEN_PREFIX}-") or checkpoint.status in _GONE_CHECKPOINT:
-            continue
-        if not in_scope(namespace_from_name(checkpoint.name, (GOLDEN_PREFIX,)), namespace, all_namespaces=all_namespaces):
-            continue
-        reason = _checkpoint_reason(checkpoint, now=now, ttl=checkpoint_ttl, build_timeout=golden_build_timeout)
+    for checkpoint, reason in golden:
         item = SweepItem("checkpoint", checkpoint.id, checkpoint.name, reason or "in use (rebuilt on demand)")
         (checkpoints if reason else kept).append(item)
 
