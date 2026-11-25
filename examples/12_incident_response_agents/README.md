@@ -67,11 +67,11 @@ of agents would run in production: each agent's tools, files and credentials sta
 
 | Specialist | Model | Action Gateway actions | Credential in its MicroVM |
 | --- | --- | --- | --- |
-| Metrics Analyst | `anthropic-claude-haiku-4.5` | none: reads the service's `/metrics`, `series.py` in its host | the model key |
-| Change Analyst | `anthropic-claude-4.6-sonnet` | `github_list_commits`, `github_compare_commits`, through the relay's broker | the model key, its broker token |
-| Infra Analyst | `anthropic-claude-haiku-4.5` | `digitalocean_droplet-get`, `digitalocean_image-list`, through the relay's broker | the model key, its broker token |
-| Remediator | `anthropic-claude-haiku-4.5` | `action_search` and `action_invoke` on its incident's endpoint in the relay: `digitalocean_restore-droplet` **ask**, `digitalocean_droplet-delete` **deny** | the model key, its broker token |
-| Recovery Validator | `anthropic-claude-haiku-4.5` | `digitalocean_droplet-get` through the relay's broker, plus the service's `/health` and `verdict.py` | the model key, its broker token |
+| Metrics Analyst | `anthropic-claude-haiku-4.5` | none: reads the service's `/metrics`, `series.py` in its host | none (the model key is an outbound credential) |
+| Change Analyst | `anthropic-claude-4.6-sonnet` | `github_list_commits`, `github_compare_commits`, through the relay's broker | its broker token |
+| Infra Analyst | `anthropic-claude-haiku-4.5` | `digitalocean_droplet-get`, `digitalocean_image-list`, through the relay's broker | its broker token |
+| Remediator | `anthropic-claude-haiku-4.5` | `action_search` and `action_invoke` on its incident's endpoint in the relay: `digitalocean_restore-droplet` **ask**, `digitalocean_droplet-delete` **deny** | its broker token |
+| Recovery Validator | `anthropic-claude-haiku-4.5` | `digitalocean_droplet-get` through the relay's broker, plus the service's `/health` and `verdict.py` | its broker token |
 
 `DO_INCIDENT_MODEL_<ROLE>` (for example `DO_INCIDENT_MODEL_METRICS`) and `DO_INCIDENT_MODEL_COMMANDER` pick other models.
 Without one, the Sonnet roles (the commander, the Change Analyst) use `DO_INFERENCE_STRONG_MODEL` and the others
@@ -119,7 +119,10 @@ this example is not affiliated with or endorsed by it.
   when it creates them: its incident's broker tokens (one per role). It holds no gateway token. The commander agent
   has no tool that reads them: no shell and no action tools. Use a team and tokens for this example alone, and rotate them
   after it.
-- **Each specialist** holds the model key and, if it has actions, a broker token for its own role in its own incident. The
+- **Each specialist** holds, if it has actions, a broker token for its own role in its own incident. Its model key is an
+  outbound credential of its MicroVM (`HostSpec(egress=...)`): the platform adds it to the host's requests to
+  `https://inference.do-ai.run/v1`, and the host's environment holds a placeholder; every other destination stays allowed. See
+  [Outbound policy](../../docs/reference.md#outbound-policy-egress-rules-and-credentials). The
   Remediator's token can request the restore but not approve it. No specialist holds a gateway token or a MicroVMs token. The
   specialists have no shell (file tools only, in their task's directory); this example does not restrict a MicroVM's network.
 

@@ -4,6 +4,8 @@
 
 **Added**
 
+- Example 12: on MicroVMs, each specialist's host gets the model key as an outbound credential for the inference endpoint (its environment holds a placeholder).
+
 - `HostSpec.egress` and `MicroVMConfig.agent_egress` (`DO_MICROVM_AGENT_EGRESS`, `DO_MICROVM_AGENT_EGRESS_CREDENTIALS`): the outbound policy of agent hosts. A credential for the inference endpoint keeps the model key out of a host. Warm start includes the policy in the golden checkpoint's name and keeps the golden host of a policy with credentials, paused; the sweeper deletes it with its checkpoint.
 - Example 04's researcher host on a MicroVM gets the model key as an outbound credential.
 
