@@ -371,7 +371,9 @@ hosts.delete(host_id="task-123")
 - Lifecycle (`agent_host/lifecycle.py`, the gateway's base class `HostLifecycle`): hosts
   do not outlive their usefulness. The gateway's `tick()` (its poll loop) deletes a FAILED host on the next tick, and a READY/PAUSED host with no
   active run once it has been unused for its TTL: `release_after` for per-task hosts
-  (default 1 h), `paused_ttl` for every host (default 24 h; `None` disables either). Any
+  (default 1 h), `paused_ttl` for every host (default 24 h; `None` disables either). A host
+  whose task waits for a human (its run ended in an `interrupt()`) holds that task's thread, so
+  only `paused_ttl` applies to it, and it is never evicted. Any
   use restarts the clock (run, update, artifact fetch). Because a task's files live only
   in its host, the TTL is also the artifact retention window; an idle host is also safe
   from eviction at the MicroVM limit for `eviction_grace` (default 60 s), during which a

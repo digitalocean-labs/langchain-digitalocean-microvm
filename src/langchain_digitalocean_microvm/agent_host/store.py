@@ -203,6 +203,11 @@ class ThreadRow:
     def terminal(self) -> bool:
         return self.run_status in TERMINAL_RUN_STATUSES
 
+    @property
+    def waiting(self) -> bool:
+        """The latest run paused for a human (an `interrupt()`): the thread, held by its host, waits for a resume."""
+        return isinstance(self.cached_thread, dict) and self.cached_thread.get("status") == "interrupted"
+
 
 # Columns `update_host` / `update_thread` may set: the row fields minus the key. Their SET
 # clause is built from argument names, so anything else is refused before any SQL is built.
