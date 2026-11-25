@@ -128,6 +128,22 @@ def test_a_specialists_host_is_the_specialists_image_and_needs_the_broker(exampl
     assert agent.role_spec(roles.BY_NAME["remediator"], local=False, environ=environ).image == "registry.example/specialists:1"
 
 
+def test_on_a_microvm_the_model_key_is_the_specialists_outbound_credential(example) -> None:
+    roles = importlib.import_module("roles")
+    agent = importlib.import_module("agent")
+    environ = {"DO_INCIDENT_SPECIALISTS_IMAGE": "registry.example/specialists:1", "DO_INCIDENT_BROKER_URL": "https://b",
+               "DO_MODEL_ACCESS_KEY": "the-key", **{roles.broker_token_name(r): "t" for r in roles.BROKERED}}
+    spec = agent.role_spec(roles.BY_NAME["changes"], local=False, environ=environ)
+    assert spec.env["DO_MODEL_ACCESS_KEY"] == agent.MODEL_KEY_PLACEHOLDER and "the-key" not in spec.env.values()
+    assert spec.egress is not None and spec.egress.default_action == "allow"
+    (credential,) = spec.egress.credentials
+    assert (credential.host, credential.path_prefix, credential.secret) == ("inference.do-ai.run", "/v1", "the-key")
+    local = agent.role_spec(roles.BY_NAME["changes"], local=True, environ=environ)
+    assert local.env["DO_MODEL_ACCESS_KEY"] == "the-key" and local.egress is None
+    without_key = {k: v for k, v in environ.items() if k != "DO_MODEL_ACCESS_KEY"}
+    assert agent.role_spec(roles.BY_NAME["changes"], local=False, environ=without_key).egress is None
+
+
 def test_the_commander_has_no_action_tools_and_its_own_store(example) -> None:
     agent = importlib.import_module("agent")
     graph = agent.build_commander()

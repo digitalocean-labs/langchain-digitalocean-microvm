@@ -56,6 +56,7 @@ from roles import (
     inference_model,
 )
 
+from langchain_digitalocean_microvm import EgressPolicy
 from langchain_digitalocean_microvm.agent_host import (
     GatewaySettings,
     HostSpec,
@@ -75,17 +76,22 @@ PROVIDER_KEYS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "MISTR
 # The relay's broker, for every role that reaches the gateway (the read-only roles and the Remediator). No specialist's host
 # gets a gateway token: the relay holds it and every gateway endpoint.
 BROKER_ENV = ("DO_INCIDENT_BROKER_URL", "DO_INCIDENT_ID")
+# On a MicroVM the model key is an outbound credential for the inference endpoint: the platform adds it to the host's requests
+# there, and the host's environment holds this placeholder for the model client.
+INFERENCE_URL = "https://inference.do-ai.run/v1"
+MODEL_KEY_PLACEHOLDER = "set-by-the-platform"
 
 
-def role_env(role: Role, environ: dict[str, str] | None = None) -> dict[str, str]:
+def role_env(role: Role, environ: dict[str, str] | None = None, *, key_as_credential: bool = False) -> dict[str, str]:
     """The role's host environment: its model, the shared variables, and its way to the gateway (the relay's broker with its
-    own role's token). No specialist gets another role's token, a gateway token or the MicroVMs API token."""
+    own role's token). No specialist gets another role's token, a gateway token or the MicroVMs API token. With
+    `key_as_credential` the model key is a placeholder (the key is the host's outbound credential, see role_spec)."""
     environ = dict(os.environ if environ is None else environ)
     brokered = role.name in BROKERED
     names = SHARED_ENV + (BROKER_ENV if brokered else ())
     env = {"SUBAGENT_MODEL": role.model_id, **{name: environ[name] for name in names if environ.get(name)}}
     if environ.get("DO_MODEL_ACCESS_KEY"):
-        env["DO_MODEL_ACCESS_KEY"] = environ["DO_MODEL_ACCESS_KEY"]
+        env["DO_MODEL_ACCESS_KEY"] = MODEL_KEY_PLACEHOLDER if key_as_credential else environ["DO_MODEL_ACCESS_KEY"]
     else:
         strong = role.model == SONNET and environ.get("EXAMPLES_STRONG_MODEL")
         model = strong or environ.get("EXAMPLES_MODEL")
@@ -99,7 +105,8 @@ def role_env(role: Role, environ: dict[str, str] | None = None) -> dict[str, str
 
 def role_spec(role: Role, *, local: bool = LOCAL, environ: dict[str, str] | None = None) -> HostSpec:
     """The agent host for one role's task: the specialists' graphs (local: from this checkout; else their image) and the
-    role's environment."""
+    role's environment. On a MicroVM, DO_MODEL_ACCESS_KEY is an outbound credential for the inference endpoint, so it is not
+    in the specialist's host; every other destination stays allowed."""
     environ = dict(os.environ if environ is None else environ)
     if local:
         return HostSpec(graph_id=role.name, env=role_env(role, environ))
@@ -110,7 +117,11 @@ def role_spec(role: Role, *, local: bool = LOCAL, environ: dict[str, str] | None
     if role.name in BROKERED and not (environ.get("DO_INCIDENT_BROKER_URL") and environ.get(broker_token_name(role.name))):
         raise RuntimeError(f"the {role.name} role needs the relay's broker: DO_INCIDENT_BROKER_URL and "
                            f"{broker_token_name(role.name)} (relay.py sets them in the commander's host)")
-    return HostSpec(graph_id=role.name, image=image, env=role_env(role, environ))
+    key = environ.get("DO_MODEL_ACCESS_KEY")
+    if not key:
+        return HostSpec(graph_id=role.name, image=image, env=role_env(role, environ))
+    return HostSpec(graph_id=role.name, image=image, env=role_env(role, environ, key_as_credential=True),
+                    egress=EgressPolicy.allow_all().with_credential(INFERENCE_URL, secret=key))
 
 
 def make_hosts(mode: str) -> Any:
