@@ -16,11 +16,13 @@ when one is paused or deleted (see docs/design.md):
 - Garbage collection: a FAILED host is deleted on the next tick, and a
   READY/PAUSED host with no active run is deleted once it has been unused for
   its time-to-live (`release_after` for per-task hosts, `paused_ttl` for every
-  host). The store keeps the row as `destroyed` with a `retired_reason`.
+  host). A host whose thread waits for a human (its run ended in an
+  `interrupt()`) holds that thread, so only `paused_ttl` applies to it. The store keeps the row as `destroyed` with a `retired_reason`.
 - Eviction: when creating a host fails because the team is at its MicroVM
   limit (HostCapacityError), one idle host whose task results are already
   cached is deleted and the create is tried once more. A host is only evicted
-  once it has been unused for `eviction_grace` seconds.
+  once it has been unused for `eviction_grace` seconds, and never while a
+  thread on it waits for a human.
 - Startup reconciliation: stored hosts that no longer exist are marked
   destroyed (and their active tasks failed); host tokens persisted in the
   store are handed back to the host manager.
@@ -276,7 +278,7 @@ class HostLifecycle:
                         f"(fetch_subagent_artifacts); try again in about {wait}s."
                     ) from exc
                 raise SandboxError(
-                    f"{exc} Every existing agent host still has a task in progress; wait for one to finish "
+                    f"{exc} Every existing agent host still has a task in progress or waiting for a human; wait for one to finish "
                     "or cancel a task, then try again."
                 ) from exc
             return await asyncio.to_thread(self.hosts.get_or_create, host_id=host_id, spec=spec)
@@ -291,7 +293,7 @@ class HostLifecycle:
         for host in self.store.list_hosts():
             if host.host_id == exclude or host.status in _DEAD_HOST_STATUSES:
                 continue
-            if self._has_active_run(host.host_id):
+            if self._has_active_run(host.host_id) or self._has_waiting_thread(host.host_id):
                 continue
             (evictable if now - host.last_active_at >= self.eviction_grace else protected).append(host)
         evictable.sort(key=lambda h: (h.status != HostStatus.PAUSED.value, h.last_active_at))
@@ -300,15 +302,20 @@ class HostLifecycle:
     def _has_active_run(self, host_id: str) -> bool:
         return any(t.run_id and not t.terminal for t in self.store.list_threads(host_id=host_id))
 
+    def _has_waiting_thread(self, host_id: str) -> bool:
+        """A thread on the host waits for a human: deleting the host would lose the thread and its interrupt."""
+        return any(t.waiting for t in self.store.list_threads(host_id=host_id))
+
     # ------------------------------------------------------------------
     # garbage collection
     # ------------------------------------------------------------------
 
     def _ttl_for(self, host: HostRow) -> float | None:
-        """Seconds this host may stay unused: `paused_ttl` for pooled hosts, also `release_after` for per-task ones."""
+        """Seconds this host may stay unused: `paused_ttl` for pooled hosts and hosts whose thread waits for a human,
+        also `release_after` for other per-task ones."""
         spec = self.graphs.get(host.graph_id)
         limits = [self.paused_ttl]
-        if spec is None or spec.reuse != "pooled":
+        if (spec is None or spec.reuse != "pooled") and not self._has_waiting_thread(host.host_id):
             limits.append(self.release_after)
         set_limits = [v for v in limits if v is not None]
         return min(set_limits) if set_limits else None
@@ -343,6 +350,8 @@ class HostLifecycle:
             if current.status != host.status or current.last_active_at != host.last_active_at:
                 return False
             if self._has_active_run(host.host_id):
+                return False
+            if reason == "evicted" and self._has_waiting_thread(host.host_id):
                 return False
             if current.status == HostStatus.READY.value and reason != "failed":
                 try:

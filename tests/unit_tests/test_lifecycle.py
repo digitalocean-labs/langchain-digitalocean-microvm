@@ -134,6 +134,55 @@ def test_an_idle_per_task_host_is_paused_then_deleted_after_its_ttl(setup) -> No
     assert gateway.status().hosts[0]["retired_reason"] == "ttl"
 
 
+def test_a_host_whose_task_waits_for_a_human_outlives_release_after_but_not_paused_ttl(setup) -> None:
+    """A run that hit `interrupt()` is over, but its thread and interrupt live in the host: deleting it would lose them."""
+    gateway, hosts, clock, http = setup
+    tid, rid = launch(http)
+    hosts.servers[tid].pause_for_human(rid, {"tool": "restore"})
+    gateway.tick_sync()
+    assert gateway.store.get_thread(tid).waiting
+
+    clock.advance(45.0)
+    gateway.tick_sync()
+    clock.advance(2 * 3600.0)  # well past release_after
+    gateway.tick_sync()
+    assert ops(hosts, tid) == ["get_or_create", "pause"]
+    assert gateway.store.get_host(tid).status == "paused"
+
+    clock.advance(86400.0)  # past paused_ttl: a waiting task's host is not kept forever
+    gateway.tick_sync()
+    assert ops(hosts, tid)[-1] == "delete" and gateway.store.get_host(tid).retired_reason == "ttl"
+
+
+def test_a_resumed_and_finished_task_gets_release_after_again(setup) -> None:
+    gateway, hosts, clock, http = setup
+    tid, rid = launch(http)
+    server = hosts.servers[tid]
+    server.pause_for_human(rid, {"tool": "restore"})
+    gateway.tick_sync()
+
+    resumed = http.post(f"/threads/{tid}/runs", json={"assistant_id": "echo", "command": {"resume": {"interrupt-1": "approve"}}})
+    assert resumed.status_code == 200, resumed.text
+    finish(gateway, server, resumed.json()["run_id"])
+    assert not gateway.store.get_thread(tid).waiting
+
+    clock.advance(3601.0)
+    gateway.tick_sync()
+    assert gateway.store.get_host(tid).retired_reason == "ttl"
+
+
+def test_a_host_whose_task_waits_for_a_human_is_never_evicted(setup) -> None:
+    gateway, hosts, clock, http = setup
+    waiting, rid = launch(http)
+    hosts.servers[waiting].pause_for_human(rid, {"tool": "restore"})
+    done, rid2 = launch(http)
+    finish(gateway, hosts.servers[done], rid2)
+    clock.advance(3000.0)  # both past eviction_grace
+
+    evictable, protected = gateway._eviction_candidates(exclude="new", now=clock.time())
+    assert [h.host_id for h in evictable] == [done] and protected == []
+
+
 def test_a_host_with_an_active_run_is_never_paused_or_deleted(setup) -> None:
     gateway, hosts, clock, http = setup
     tid, rid = launch(http)
